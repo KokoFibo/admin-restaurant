@@ -1,0 +1,18 @@
+{
+  // Satu aplikasi Astro 5 untuk SEMUA restoran. Tidak ada deploy atau DNS per restoran.
+  "name": "dapora-web",
+  "main": "./dist/_worker.js/index.js",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": { "directory": "./dist", "binding": "ASSETS" },
+
+  // Wildcard Workers Route — butuh record DNS wildcard BERPROKSI (lihat README-DAPORA.md, langkah C2).
+  "routes": [{ "pattern": "*.kokofibo.it.com/*", "zone_name": "kokofibo.it.com" }],
+
+  "vars": {
+    "API_URL": "https://admin.kokofibo.it.com"
+    // DEFAULT_SITE_SLUG: jangan diisi di produksi
+  }
+  // Bila build/adapter meminta binding SESSION (error "Invalid binding SESSION"), tambahkan:
+  // "kv_namespaces": [{ "binding": "SESSION", "id": "<id-kv>" }]
+}
