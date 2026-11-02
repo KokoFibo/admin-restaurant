@@ -4,7 +4,7 @@ Aplikasi admin (Vue 3 + Vite) terpisah dari website. **Satu alamat untuk semua r
 
 - **Database & login**: Supabase (`supabase/*.sql`, urutan 00 → 01 → 02 → 03 → 04 → **05**).
 - **Foto**: Cloudflare R2 lewat `/api/upload` (menu 4:3 ≤60 KB; hero 4:5 ≤140 KB).
-- **Terjemahan AI**: `/api/translate` (Gemini). **Akun**: `/api/users`. **Lupa kata sandi**: `/api/forgot`. Semua = Cloudflare Pages Functions (`functions/`), satu domain dengan admin, tanpa CORS.
+- **Terjemahan AI**: `/api/translate` (Gemini). **Akun**: `/api/users`. **Lupa kata sandi**: `/api/forgot`. **API publik website**: `/v1/*` (lihat bawah). Semua = Cloudflare Pages Functions (`functions/`), satu domain dengan admin, tanpa CORS.
 
 ## Role
 | Role | Bisa |
@@ -21,7 +21,8 @@ Staf hanya boleh di **satu** restoran. Akun nonaktif tidak bisa login dan akses 
 ## Pasang
 1. Supabase SQL Editor: jalankan `00` → `01` → `02` → `03` → `04` → `05` (04 dan 05 aman diulang). Restoran dan owner baru dibuat manual lewat SQL dulu (nanti lewat sistem SaaS).
 2. `cp .env.example .env`, isi. `PUBLIC_*` ikut ke browser; sisanya rahasia server.
-3. Cloudflare Pages: build `npm run build`, output `dist`; isi variabel di *Settings → Variables and Secrets* (rahasia sebagai **Secret**). *Custom domain*: `admin.kokofibo.com`.
+3. Cloudflare Pages: build `npm run build`, output `dist`. **`PUBLIC_*` harus sudah terisi SEBELUM build** (Vite menanamkannya ke kode saat build): isi sebagai variabel biasa (Plain text, bukan Secret) untuk lingkungan Production, lalu **deploy ulang** setiap kali nilainya diubah. Bila kosong, halaman login menampilkan peringatan konfigurasi.
+   Selain itu: isi variabel di *Settings → Variables and Secrets* (rahasia sebagai **Secret**). *Custom domain*: `admin.kokofibo.com`.
 4. Supabase → Authentication → URL Configuration: tambahkan `https://admin.kokofibo.com` (Site URL & Redirect URLs).
 5. **Lupa kata sandi (khusus Owner)** butuh SMTP: Supabase → Authentication → SMTP Settings (mis. Resend). Tanpa SMTP, email bawaan Supabase sangat dibatasi.
 6. Alamat website tiap restoran: domain sendiri → isi `tenant_domains` (status `active`); tanpa domain → otomatis `https://<slug>.<PUBLIC_BASE_DOMAIN>`. Slug `admin`, `www`, `api` dilarang. Wildcard DNS `*.kokofibo.com` + frontend yang mengenali slug = urusan proyek frontend (lihat `HANDOFF-FRONTEND.md`).
@@ -42,3 +43,20 @@ Staf hanya boleh di **satu** restoran. Akun nonaktif tidak bisa login dan akses 
 | Hidangan unggulan (★, maks 6) | ✔ | ✔ | ✔ |
 
 Aturan (peran, kontras warna WCAG 4,5:1, batas 3 banner, batas 6 unggulan, pemesanan ditolak saat ditutup) dijaga **database** (`05-tampilan.sql`), bukan hanya tampilan admin. Banner jenis Libur bisa menutup pemesanan selama periodenya; `place_order` menolak dengan kode `E:closed`.
+
+## API publik untuk website (`/v1`)
+
+Website restoran (frontend Astro) hanya berbicara dengan API ini, tidak dengan Supabase. Kontraknya ada di `API-CONTRACT.md` proyek frontend. Kode: `functions/v1/*` dan `server/v1.ts`. Hanya memakai kunci **anon** + RLS/RPC publik (tanpa `service_role`).
+
+| Endpoint | Fungsi |
+|---|---|
+| `GET /v1/site?host=<domain>&slug=<opsional>` | Restoran: profil, bahasa, **tema (warna dihitung di server)**, hero, banner tayang, `orders_open`. Domain dicari di `tenant_domains` (aktif), lalu `<slug>.<PUBLIC_BASE_DOMAIN>`. Slug `admin/www/api` tidak pernah dilayani. |
+| `GET /v1/menu?site=<id>` | Kategori + hidangan (hanya yang terlihat, tidak diarsipkan, berurutan), termasuk `featured`. |
+| `GET /v1/table?site=<id>&token=<32 hex>` | Label meja dari QR; 404 bila token salah/nonaktif. |
+| `POST /v1/orders` | Membuat pesanan lewat `place_order` (harga dihitung ulang di database). Galat: `E:invalid_table` 403 · `E:empty` 400 · `E:rate_limited` 429 · `E:too_many_active` 429 · `E:item_unavailable` 409 · `E:closed` 409 · `E:unavailable` 503. |
+
+**Variabel yang dibaca API saat berjalan** (Cloudflare Pages → Settings → Variables): `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY`, `PUBLIC_MEDIA_URL` (untuk membentuk URL foto dari kunci R2), `PUBLIC_BASE_DOMAIN`.
+
+**Alamat API untuk frontend (`API_URL`)**: paling cepat `https://admin.kokofibo.com` (proyek yang sama). Disarankan menambahkan custom domain `api.kokofibo.com` ke proyek Pages yang sama lalu memakai `API_URL=https://api.kokofibo.com` (slug `api` sudah dicadangkan di database). Pesanan sudah dibatasi laju di database (per meja); untuk perlindungan tambahan pasang aturan rate limiting Cloudflare pada `/v1/orders`.
+
+**Diuji** terhadap Postgres sungguhan lewat PostgREST (lapisan HTTP yang dipakai Supabase): 55 pemeriksaan API (bentuk data, tema preset/kustom/gelap, banner dan zona waktu, tutup sementara, banner Libur, hidangan habis, restoran nonaktif, validasi masukan, kode galat) plus rantai penuh frontend → API → database (tema, hero, banner, unggulan, menu, meja, pesanan, `E:closed`).

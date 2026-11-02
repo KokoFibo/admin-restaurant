@@ -1,5 +1,13 @@
 /** Kamus halaman admin: Indonesia → Inggris. Teks yang belum ada tampil dalam bahasa Indonesia. */
 export const EN: Record<string, string> = {
+ "Email belum dikonfirmasi. Minta Super Admin mengonfirmasi akun ini di Supabase.": "Email not confirmed. Ask the Super Admin to confirm this account in Supabase.",
+ "Akun ini dinonaktifkan. Hubungi Owner atau pengelola layanan.": "This account is deactivated. Contact the Owner or the service administrator.",
+ "Login email dinonaktifkan di Supabase (Authentication → Providers → Email).": "Email login is disabled in Supabase (Authentication → Providers → Email).",
+ "Terlalu banyak percobaan. Tunggu beberapa menit lalu coba lagi.": "Too many attempts. Wait a few minutes and try again.",
+ "Tidak bisa menghubungi server login. Periksa PUBLIC_SUPABASE_URL dan koneksi internet.": "Cannot reach the login server. Check PUBLIC_SUPABASE_URL and your internet connection.",
+ "Kunci Supabase (PUBLIC_SUPABASE_ANON_KEY) tidak valid. Gunakan anon/publishable key, bukan service_role.": "The Supabase key (PUBLIC_SUPABASE_ANON_KEY) is invalid. Use the anon/publishable key, not service_role.",
+ "Gagal masuk: {0}": "Sign-in failed: {0}",
+ "Konfigurasi belum lengkap: PUBLIC_SUPABASE_URL / PUBLIC_SUPABASE_ANON_KEY tidak terbaca saat build. Isi di Cloudflare Pages lalu deploy ulang.": "Incomplete configuration: PUBLIC_SUPABASE_URL / PUBLIC_SUPABASE_ANON_KEY were not read at build time. Set them in Cloudflare Pages and redeploy.",
  "+ Tambah banner": "+ Add banner",
  "Tambah banner": "Add banner",
  "Ubah banner": "Edit banner",
