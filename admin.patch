@@ -1,0 +1,591 @@
+
+--- a/functions/api/domains.ts	1970-01-01 00:00:00.000000000 +0000
++++ b/functions/api/domains.ts	2026-11-02 07:58:03.507630071 +0000
+@@ -0,0 +1,96 @@
++/**
++ * MODUL OPSIONAL — domain kustom pelanggan lewat Cloudflare for SaaS (custom hostname PERSIS, bukan wildcard).
++ * Nonaktif kecuali CF_SAAS_ENABLED=true. Tanpa modul ini, Dapora tetap berjalan penuh dengan <slug>.kokofibo.it.com.
++ *
++ * Env (Secret): CF_API_TOKEN (izin: SSL and Certificates:Edit pada zona kokofibo.it.com), SUPABASE_SERVICE_ROLE_KEY
++ * Env (biasa) : CF_SAAS_ENABLED=true, CF_ZONE_ID, CF_CNAME_TARGET (mis. cname.kokofibo.it.com), CF_MAX_CUSTOM_DOMAINS (default 1)
++ *
++ * GET    /api/domains?tenant_id=…            daftar domain + status (menyegarkan status dari Cloudflare)
++ * POST   /api/domains {tenant_id, hostname}  daftarkan domain; balasan berisi instruksi DNS
++ * DELETE /api/domains?id=<tenant_domains.id> hapus
++ * Semua memakai header Authorization: Bearer <access token Supabase> milik owner restoran (atau Super Admin).
++ */
++import { createClient } from '@supabase/supabase-js';
++
++const J = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
++const HOST = /^(?=.{4,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
++const CF = 'https://api.cloudflare.com/client/v4';
++
++async function cf(e: any, path: string, init: RequestInit = {}) {
++  const r = await fetch(`${CF}/zones/${e.CF_ZONE_ID}${path}`, { ...init, headers: { authorization: `Bearer ${e.CF_API_TOKEN}`, 'content-type': 'application/json', ...(init.headers || {}) }, signal: AbortSignal.timeout(15000) });
++  const b: any = await r.json().catch(() => ({}));
++  return { ok: r.ok && b.success !== false, body: b, status: r.status };
++}
++
++async function auth(e: any, request: Request, tenantId: string) {
++  const token = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
++  if (!token) return null;
++  const user = createClient(e.PUBLIC_SUPABASE_URL, e.PUBLIC_SUPABASE_ANON_KEY, { global: { headers: { authorization: `Bearer ${token}` } }, auth: { persistSession: false } });
++  const { data: u } = await user.auth.getUser(token);
++  if (!u?.user) return null;
++  const [m, p] = await Promise.all([
++    user.from('tenant_members').select('role').eq('tenant_id', tenantId).eq('user_id', u.user.id).maybeSingle(),
++    user.from('platform_admins').select('user_id').eq('user_id', u.user.id).maybeSingle(),
++  ]);
++  return m.data?.role === 'owner' || p.data ? u.user.id : null;
++}
++
++const instructions = (e: any, hostname: string, cfHost: any) => ({
++  cname: { type: 'CNAME', name: hostname, value: e.CF_CNAME_TARGET },
++  ownership_txt: cfHost?.ownership_verification ? { type: 'TXT', name: cfHost.ownership_verification.name, value: cfHost.ownership_verification.value } : null,
++  ssl_txt: cfHost?.ssl?.validation_records ?? [],
++  note: 'Domain apex (tanpa www) butuh penyedia DNS yang mendukung CNAME flattening; sarankan pelanggan memakai www.',
++});
++
++export const onRequest = async ({ request, env: e }: any) => {
++  if (String(e.CF_SAAS_ENABLED || '') !== 'true') return J({ error: 'custom_domains_disabled' }, 404);
++  if (!e.CF_API_TOKEN || !e.CF_ZONE_ID || !e.CF_CNAME_TARGET || !e.SUPABASE_SERVICE_ROLE_KEY) return J({ error: 'not_configured' }, 503);
++  const admin = createClient(e.PUBLIC_SUPABASE_URL, e.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
++  const url = new URL(request.url);
++
++  if (request.method === 'GET') {
++    const tenantId = url.searchParams.get('tenant_id') || '';
++    if (!(await auth(e, request, tenantId))) return J({ error: 'forbidden' }, 403);
++    const { data: rows } = await admin.from('tenant_domains').select('id,hostname,kind,is_primary,status,cf_hostname_id').eq('tenant_id', tenantId).order('created_at');
++    const out = [];
++    for (const d of rows ?? []) {
++      if (d.kind === 'custom' && d.cf_hostname_id && d.status !== 'active') {        // segarkan status dari Cloudflare
++        const r = await cf(e, `/custom_hostnames/${d.cf_hostname_id}`);
++        if (r.ok) {
++          const h = r.body.result, live = h.status === 'active' && h.ssl?.status === 'active';
++          const status = live ? 'active' : ['blocked', 'deleted'].includes(h.status) || ['timed_out_validation', 'validation_timed_out'].includes(h.ssl?.status) ? 'error' : 'pending';
++          if (status !== d.status) await admin.from('tenant_domains').update({ status, verified_at: live ? new Date().toISOString() : null }).eq('id', d.id);
++          out.push({ ...d, status, instructions: status === 'active' ? null : instructions(e, d.hostname, h) });
++          continue;
++        }
++      }
++      out.push(d);
++    }
++    return J({ domains: out });
++  }
++
++  if (request.method === 'POST') {
++    const b: any = await request.json().catch(() => ({}));
++    const tenantId = String(b.tenant_id || ''), hostname = String(b.hostname || '').trim().toLowerCase().replace(/\.$/, '');
++    if (!(await auth(e, request, tenantId))) return J({ error: 'forbidden' }, 403);
++    if (!HOST.test(hostname)) return J({ error: 'invalid_hostname' }, 400);                 // wildcard/IP/karakter aneh ditolak
++    const { count } = await admin.from('tenant_domains').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId).eq('kind', 'custom');
++    if ((count ?? 0) >= Number(e.CF_MAX_CUSTOM_DOMAINS || 1)) return J({ error: 'limit_reached' }, 409);
++    const ins = await admin.from('tenant_domains').insert({ tenant_id: tenantId, hostname, kind: 'custom', is_primary: false, status: 'pending' }).select('id').single();
++    if (ins.error) return J({ error: ins.error.code === '23505' ? 'hostname_taken' : 'rejected', detail: ins.error.message }, 409);   // trigger menolak domain platform
++    const r = await cf(e, '/custom_hostnames', { method: 'POST', body: JSON.stringify({ hostname, ssl: { method: 'http', type: 'dv', settings: { min_tls_version: '1.2' } } }) });
++    if (!r.ok) { await admin.from('tenant_domains').delete().eq('id', ins.data.id); return J({ error: 'cloudflare_error', detail: r.body.errors?.[0]?.message }, 502); }
++    await admin.from('tenant_domains').update({ cf_hostname_id: r.body.result.id }).eq('id', ins.data.id);
++    return J({ id: ins.data.id, hostname, status: 'pending', instructions: instructions(e, hostname, r.body.result) }, 201);
++  }
++
++  if (request.method === 'DELETE') {
++    const id = url.searchParams.get('id') || '';
++    const { data: d } = await admin.from('tenant_domains').select('id,tenant_id,kind,cf_hostname_id').eq('id', id).maybeSingle();
++    if (!d || d.kind !== 'custom' || !(await auth(e, request, d.tenant_id))) return J({ error: 'forbidden' }, 403);
++    if (d.cf_hostname_id) await cf(e, `/custom_hostnames/${d.cf_hostname_id}`, { method: 'DELETE' });
++    await admin.from('tenant_domains').delete().eq('id', id);
++    return J({ ok: true });
++  }
++  return J({ error: 'method_not_allowed' }, 405);
++};
+
+--- a/functions/api/signup.ts	1970-01-01 00:00:00.000000000 +0000
++++ b/functions/api/signup.ts	2026-11-02 23:47:23.107130907 +0000
+@@ -0,0 +1,100 @@
++import { createClient } from '@supabase/supabase-js';
++import { env } from '../../server/env';
++
++const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/, SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
++const TYPES = ['vegan', 'vegetarian', 'umum'], LANGS = ['id', 'en', 'zh'];
++
++/**
++ * Pendaftaran mandiri restoran baru. Publik (tanpa login), dipanggil dari website pemasaran (lintas-origin, lihat CORS di bawah).
++ *
++ * GET  /api/signup?slug=<alamat>   → { available: boolean }   (cek ketersediaan alamat untuk formulir)
++ * POST /api/signup  { email, password, brand, slug, template, type, lang, cf_token? }
++ *      alur: validasi → (Turnstile) → buat akun → create_tenant() (restoran + owner + trial + <slug>.<domain-dasar>) → balasan.
++ *      Bila create_tenant gagal, akun yang baru dibuat dihapus lagi (tidak ada akun yatim).
++ *
++ * Env: PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY (Secret), PUBLIC_BASE_DOMAIN,
++ *      SIGNUP_ENABLED=true (wajib; bawaan mati), SIGNUP_ALLOWED_ORIGINS (daftar origin website pemasaran, pisahkan koma;
++ *      bawaan https://<PUBLIC_BASE_DOMAIN>), SIGNUP_AUTO_CONFIRM=true (lewati email konfirmasi; bawaan: kirim email konfirmasi),
++ *      SIGNUP_PLAN (bawaan basic), TURNSTILE_SECRET (opsional tapi sangat disarankan; jika ada, token wajib).
++ */
++
++/** CORS: hanya origin yang terdaftar (atau origin admin sendiri) yang boleh memanggil dari browser. */
++function corsHeaders(request: Request, e: any): Record<string, string> {
++  const origin = request.headers.get('origin');
++  if (!origin) return {};
++  const base = (env(e, 'PUBLIC_BASE_DOMAIN') || '').replace(/^\./, '');
++  const allowed = (env(e, 'SIGNUP_ALLOWED_ORIGINS') || (base ? `https://${base}` : '')).split(',').map(s => s.trim().replace(/\/+$/, '')).filter(Boolean);
++  if (!allowed.includes(origin) && origin !== new URL(request.url).origin) return {};
++  return { 'access-control-allow-origin': origin, 'access-control-allow-methods': 'GET, POST, OPTIONS', 'access-control-allow-headers': 'content-type', 'access-control-max-age': '86400', vary: 'Origin' };
++}
++const reply = (request: Request, e: any, o: unknown, status = 200) =>
++  new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...corsHeaders(request, e) } });
++
++async function turnstileOk(secret: string, token: string, ip: string | null) {
++  if (!token) return false;
++  const body = new URLSearchParams({ secret, response: token }); if (ip) body.set('remoteip', ip);
++  const r = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body, signal: AbortSignal.timeout(8000) }).catch(() => null);
++  return !!r && (await r.json().catch(() => ({}))).success === true;
++}
++
++export const onRequestOptions = ({ request, env: e }: any) => new Response(null, { status: 204, headers: corsHeaders(request, e) });
++
++export const onRequestGet = async ({ request, env: e }: any) => {
++  if (env(e, 'SIGNUP_ENABLED') !== 'true') return reply(request, e, { error: 'signup_disabled' }, 403);
++  const url = env(e, 'PUBLIC_SUPABASE_URL'), service = env(e, 'SUPABASE_SERVICE_ROLE_KEY');
++  if (!url || !service) return reply(request, e, { error: 'not_configured' }, 500);
++  const slug = (new URL(request.url).searchParams.get('slug') || '').trim().toLowerCase();
++  if (!SLUG.test(slug) || slug.length < 3 || slug.length > 40) return reply(request, e, { available: false, reason: 'invalid' });
++  const r = await createClient(url, service, { auth: { persistSession: false } }).rpc('slug_available', { p_slug: slug });
++  if (r.error) { console.error('slug_available', r.error.message); return reply(request, e, { error: 'upstream' }, 502); }
++  return reply(request, e, { available: r.data === true });
++};
++
++export const onRequestPost = async ({ request, env: e }: any) => {
++  const json = (o: unknown, s = 200) => reply(request, e, o, s);
++  if (env(e, 'SIGNUP_ENABLED') !== 'true') return json({ error: 'signup_disabled' }, 403);
++  const url = env(e, 'PUBLIC_SUPABASE_URL'), anon = env(e, 'PUBLIC_SUPABASE_ANON_KEY'), service = env(e, 'SUPABASE_SERVICE_ROLE_KEY'), base = (env(e, 'PUBLIC_BASE_DOMAIN') || '').replace(/^\./, '');
++  if (!url || !anon || !service || !base) return json({ error: 'not_configured' }, 500);
++
++  let b: any = {}; try { b = await request.json(); } catch { return json({ error: 'bad_request' }, 400); }
++  const email = String(b.email || '').trim().toLowerCase(), password = String(b.password || ''), brand = String(b.brand || '').trim().replace(/\s+/g, ' ');
++  const slug = String(b.slug || '').trim().toLowerCase(), template = String(b.template || 'aisin'), type = String(b.type || 'umum'), lang = String(b.lang || 'id');
++  if (!EMAIL.test(email) || email.length > 254) return json({ error: 'invalid_email' }, 400);
++  if (password.length < 8 || password.length > 72) return json({ error: 'invalid_password' }, 400);
++  if (brand.length < 2 || brand.length > 80) return json({ error: 'invalid_brand' }, 400);
++  if (!SLUG.test(slug) || slug.length < 3 || slug.length > 40) return json({ error: 'invalid_slug' }, 400);
++  if (!TYPES.includes(type) || !LANGS.includes(lang) || !/^[a-z0-9-]{1,40}$/.test(template)) return json({ error: 'bad_request' }, 400);
++
++  const secret = env(e, 'TURNSTILE_SECRET');
++  if (secret && !(await turnstileOk(secret, String(b.cf_token || ''), request.headers.get('cf-connecting-ip')))) return json({ error: 'captcha_failed' }, 400);
++
++  const admin = createClient(url, service, { auth: { persistSession: false } });
++  const free = await admin.rpc('slug_available', { p_slug: slug });
++  if (free.error) { console.error('slug_available', free.error.message); return json({ error: 'upstream' }, 502); }
++  if (free.data !== true) return json({ error: 'slug_taken' }, 409);
++
++  const adminLang = lang === 'en' ? 'en' : 'id', auto = env(e, 'SIGNUP_AUTO_CONFIRM') === 'true';
++  let uid = '';
++  if (auto) {
++    const r = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { admin_lang: adminLang } });
++    if (r.error) return json({ error: (r.error as any).code === 'email_exists' || /already|registered/i.test(r.error.message) ? 'email_taken' : 'auth_failed' }, (r.error as any).status === 422 ? 409 : 400);
++    uid = r.data.user.id;
++  } else {
++    const pub = createClient(url, anon, { auth: { persistSession: false } });
++    const r = await pub.auth.signUp({ email, password, options: { emailRedirectTo: new URL(request.url).origin + '/', data: { admin_lang: adminLang } } });
++    if (r.error) return json({ error: (r.error as any).code === 'over_email_send_rate_limit' || r.error.status === 429 ? 'rate_limited' : 'auth_failed' }, r.error.status === 429 ? 429 : 400);
++    if (!r.data.user || (r.data.user.identities ?? []).length === 0) return json({ error: 'email_taken' }, 409);   // email sudah terdaftar (Supabase menyamarkan)
++    uid = r.data.user.id;
++  }
++
++  const t = await admin.rpc('create_tenant', { p_owner: uid, p_slug: slug, p_brand: brand, p_template: template, p_type: type, p_lang: lang, p_plan: env(e, 'SIGNUP_PLAN') || 'basic' });
++  if (t.error) {
++    await admin.auth.admin.deleteUser(uid).catch(() => {});                                             // jangan tinggalkan akun tanpa restoran
++    const m = t.error.message || '';
++    const code = t.error.code === '23505' ? 'slug_taken' : /dicadangkan|3–40|check/i.test(m) || t.error.code === '23514' ? 'invalid_slug' : /Template/i.test(m) ? 'invalid_template' : 'create_failed';
++    if (code === 'create_failed') console.error('create_tenant', t.error.code, m);
++    return json({ error: code }, code === 'create_failed' ? 500 : 409);
++  }
++  return json({ ok: true, slug, needs_confirmation: !auto, site_url: `https://${slug}.${base}` }, 201);
++};
++export const onRequest = ({ request, env: e }: any) => reply(request, e, { error: 'method_not_allowed' }, 405);
+
+--- a/functions/v1/site.ts	2026-11-02 00:14:24.000000000 +0000
++++ b/functions/v1/site.ts	2026-11-02 12:37:30.670743888 +0000
+@@ -1,20 +1,21 @@
+-import { buildSite, db, json, slugFromHost, validHost, validSlug } from '../../server/v1';
++import { buildSite, db, json, validHost, validSlug } from '../../server/v1';
+ 
+-/** GET /v1/site?host=<domain>&slug=<opsional> → Site (lihat API-CONTRACT.md). 404 = domain tidak dikenal. */
++/**
++ * GET /v1/site?host=<domain>&slug=<opsional> → Site (lihat API-CONTRACT.md). 404 = domain tidak dikenal.
++ * Restoran HANYA dicari lewat tabel tenant_domains (subdomain bawaan <slug>.<domain-dasar> maupun domain kustom).
++ * Slug hanya dilayani bila ALLOW_SLUG_FALLBACK=true (pratinjau/pengembangan); jangan diaktifkan di produksi.
++ */
+ export const onRequestGet = async ({ request, env: e }: any) => {
+-  const u = new URL(request.url), host = (u.searchParams.get('host') || '').trim().toLowerCase(), slug = (u.searchParams.get('slug') || '').trim().toLowerCase();
++  const u = new URL(request.url), host = (u.searchParams.get('host') || '').trim().toLowerCase().replace(/\.$/, '');
++  const allowSlug = String(e.ALLOW_SLUG_FALLBACK || '') === 'true';
++  const slug = allowSlug ? (u.searchParams.get('slug') || '').trim().toLowerCase() : '';
+   if ((host && !validHost(host)) || (slug && !validSlug(slug)) || (!host && !slug)) return json({ error: 'bad_request' }, 400);
+   const sb = db(e); if (!sb) return json({ error: 'not_configured' }, 503);
+-  let r = await sb.rpc('resolve_tenant', { p_host: host || '-', p_slug: slug || null });
++  const r = await sb.rpc('resolve_tenant', { p_host: host || '-', p_slug: slug || null });
+   if (r.error) { console.error('resolve_tenant', r.error.message); return json({ error: 'upstream' }, 502); }
+-  let raw = r.data;
+-  if (!raw && host) {                                   // restoran tanpa domain sendiri: <slug>.<PUBLIC_BASE_DOMAIN>
+-    const s = slugFromHost(e, host);
+-    if (s) { r = await sb.rpc('resolve_tenant', { p_host: '-', p_slug: s }); raw = r.data; }
+-  }
+-  if (!raw) return json({ error: 'not_found' }, 404);
+-  const c = await sb.rpc('site_content_json', { p_tenant: raw.id });
++  if (!r.data) return json({ error: 'not_found' }, 404);
++  const c = await sb.rpc('site_content_json', { p_tenant: r.data.id });
+   if (c.error) { console.error('site_content_json', c.error.message); return json({ error: 'upstream' }, 502); }
+-  return json(buildSite(e, raw, c.data ?? {}));
++  return json(buildSite(e, r.data, c.data ?? {}));
+ };
+ export const onRequest = () => json({ error: 'method_not_allowed' }, 405);
+
+--- a/server/v1.ts	2026-11-02 00:14:24.000000000 +0000
++++ b/server/v1.ts	2026-11-02 07:56:27.421429818 +0000
+@@ -80,7 +80,7 @@
+     return { id: b.id, kind: b.kind, scope: b.scope, link_url: b.link_url ?? null, blocks_orders: b.blocks_orders === true, rev: b.rev, text: pickMap(b.texts, x => x?.message), link_label: Object.keys(labels).length ? labels : null };
+   });
+   return {
+-    id: raw.id, slug: raw.slug, status: raw.status, restaurant_type: raw.restaurant_type, languages: raw.languages ?? ['id'], translations: raw.translations ?? {},
++    id: raw.id, slug: raw.slug, status: raw.status, restaurant_type: raw.restaurant_type, template_id: raw.template_id ?? 'aisin', languages: raw.languages ?? ['id'], translations: raw.translations ?? {},
+     phone: raw.phone ?? null, whatsapp: raw.whatsapp ?? null, email: raw.email ?? null, maps_url: raw.maps_url ?? null, address: raw.address ?? null, opening_hours: raw.opening_hours ?? null,
+     primary_color: null, theme: resolveTheme(raw), orders_open: content?.orders_open !== false,
+     hero: { texts, image: mediaUrl(e, content?.images?.hero) }, banners,
+
+--- a/src/App.vue	2026-11-02 00:14:24.000000000 +0000
++++ b/src/App.vue	2026-11-02 07:56:58.370644196 +0000
+@@ -1,16 +1,23 @@
+ <script setup lang="ts">
+-import { onMounted } from 'vue';
++import { onMounted, onBeforeUnmount, ref } from 'vue';
+ import { S, toastMsg, qrList, watchAuth } from './store';
+ import { t, applyLang, lang } from './lib/i18n';
+ import LoginBox from './components/LoginBox.vue';
++import SignupBox from './components/SignupBox.vue';
+ import RecoverBox from './components/RecoverBox.vue';
+ import Shell from './components/Shell.vue';
+ import QrDialog from './components/QrDialog.vue';
+-onMounted(() => { applyLang(lang.value); watchAuth(); });
++// Pendaftaran restoran baru: admin.<domain>/#daftar (bisa ditautkan dari halaman pemasaran).
++const signup = ref(location.hash === '#daftar');
++const onHash = () => (signup.value = location.hash === '#daftar');
++const backToLogin = () => { signup.value = false; history.replaceState(null, '', location.pathname); };
++onMounted(() => { applyLang(lang.value); watchAuth(); addEventListener('hashchange', onHash); });
++onBeforeUnmount(() => removeEventListener('hashchange', onHash));
+ </script>
+ <template>
+   <p v-if="S.view === 'boot'" class="muted boot">{{ t('Memuat…') }}</p>
+   <RecoverBox v-else-if="S.view === 'recover'" />
++  <SignupBox v-else-if="S.view === 'login' && signup" @back="backToLogin" />
+   <LoginBox v-else-if="S.view === 'login'" />
+   <Shell v-else />
+   <QrDialog v-if="qrList" />
+
+--- a/src/components/LoginBox.vue	2026-11-02 00:14:24.000000000 +0000
++++ b/src/components/LoginBox.vue	2026-11-02 07:56:58.381988326 +0000
+@@ -37,6 +37,7 @@
+         <button class="btn" type="submit" :disabled="busy">{{ t('Masuk') }}</button><p class="err">{{ msg }}</p>
+       </form>
+       <p class="muted"><a href="#" @click.prevent="forgot = true; sent = false">{{ t('Lupa kata sandi? (khusus Owner)') }}</a></p>
++      <p class="muted"><a href="#daftar">{{ t('Belum punya restoran? Daftar') }}</a></p>
+     </template>
+     <template v-else>
+       <p class="muted">{{ t('Khusus Owner. Masukkan email Anda; jika terdaftar sebagai Owner, tautan untuk membuat kata sandi baru akan dikirim. Staf yang lupa kata sandi: minta Owner restoran untuk meresetnya.') }}</p>
+
+--- a/src/components/SignupBox.vue	1970-01-01 00:00:00.000000000 +0000
++++ b/src/components/SignupBox.vue	2026-11-02 23:41:36.828995362 +0000
+@@ -0,0 +1,103 @@
++<script setup lang="ts">
++import { computed, onMounted, ref, watch } from 'vue';
++import { t, applyLang, lang } from '../lib/i18n';
++import { slug as slugify } from '../lib/image';
++import { sb, media, configured } from '../lib/supabase';
++import { TYPES } from '../store';
++
++const emit = defineEmits<{ (e: 'back'): void }>();
++const BASE = (import.meta.env.PUBLIC_BASE_DOMAIN || '').replace(/^\./, ''), SITEKEY: string = import.meta.env.PUBLIC_TURNSTILE_SITEKEY || '';
++// Tautan dari website pemasaran: admin.<domain>/?brand=Nama&template=aisin#daftar mengisi formulir otomatis.
++const q = new URLSearchParams(location.search);
++const brand = ref((q.get('brand') || '').slice(0, 80)), slug = ref(slugify(brand.value).slice(0, 40)), slugTouched = ref(false), type = ref('umum'), siteLang = ref('id'), email = ref(''), pw = ref(''), tpl = ref('');
++const templates = ref<any[]>([]), msg = ref(''), busy = ref(false), done = ref<any>(null), cfToken = ref('');
++const avail = ref<'idle' | 'checking' | 'ok' | 'taken' | 'bad'>('idle');
++const preview = computed(() => `${slug.value || 'nama-restoran'}.${BASE || 'domain-anda.com'}`);
++
++onMounted(async () => {
++  if (!configured) return;
++  const { data } = await sb.from('templates').select('id,name,description,preview_image,restaurant_types').eq('is_active', true).order('sort');
++  templates.value = data || []; tpl.value = templates.value.find(x => x.id === q.get('template'))?.id || templates.value[0]?.id || '';
++  if (SITEKEY) {                                  // Cloudflare Turnstile (opsional)
++    (window as any).__tsDone = (tok: string) => (cfToken.value = tok);
++    const s = document.createElement('script'); s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js'; s.async = true; document.head.appendChild(s);
++  }
++});
++
++watch(brand, v => { if (!slugTouched.value) slug.value = slugify(v).slice(0, 40); });
++let timer: any;
++watch(slug, v => {
++  clearTimeout(timer);
++  if (!v) return (avail.value = 'idle');
++  if (v.length < 3 || v.length > 40 || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(v)) return (avail.value = 'bad');
++  avail.value = 'checking';
++  timer = setTimeout(async () => { const { data, error } = await sb.rpc('slug_available', { p_slug: v }); if (slug.value === v) avail.value = error ? 'idle' : data ? 'ok' : 'taken'; }, 400);
++}, { immediate: true });
++
++const ERR: Record<string, string> = {
++  slug_taken: 'Alamat itu sudah dipakai. Pilih yang lain.', invalid_slug: 'Alamat tidak valid atau dicadangkan sistem.', email_taken: 'Email ini sudah terdaftar. Silakan masuk.',
++  invalid_email: 'Email tidak valid.', invalid_password: 'Kata sandi 8–72 karakter.', invalid_brand: 'Nama restoran 2–80 karakter.', captcha_failed: 'Verifikasi gagal. Muat ulang halaman dan coba lagi.',
++  rate_limited: 'Terlalu banyak percobaan. Tunggu beberapa menit lalu coba lagi.', signup_disabled: 'Pendaftaran sedang ditutup.', invalid_template: 'Template tidak tersedia.',
++};
++async function submit() {
++  msg.value = ''; busy.value = true;
++  try {
++    const r = await fetch('/api/signup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: email.value.trim(), password: pw.value, brand: brand.value, slug: slug.value, template: tpl.value, type: type.value, lang: siteLang.value, cf_token: cfToken.value }) });
++    const j = await r.json().catch(() => ({}));
++    if (!r.ok) msg.value = ERR[j.error] ? t(ERR[j.error]) : t('Pendaftaran gagal. Coba lagi beberapa saat lagi.');
++    else done.value = j;
++  } catch { msg.value = t('Tidak bisa menghubungi server. Periksa koneksi internet.'); }
++  busy.value = false;
++}
++</script>
++<template>
++  <section class="panel box wide">
++    <div class="row" style="justify-content:space-between"><h2>{{ t('Daftar restoran') }}</h2>
++      <span class="langsw"><button type="button" :class="{ on: lang === 'id' }" @click="applyLang('id')">ID</button><button type="button" :class="{ on: lang === 'en' }" @click="applyLang('en')">EN</button></span></div>
++
++    <template v-if="done">
++      <p class="hint">{{ done.needs_confirmation ? t('Pendaftaran berhasil. Kami mengirim email konfirmasi; buka tautannya lalu masuk ke admin.') : t('Pendaftaran berhasil. Silakan masuk ke admin.') }}</p>
++      <p class="muted">{{ t('Alamat website Anda:') }} <b>{{ done.site_url.replace('https://', '') }}</b></p>
++      <button class="btn" type="button" @click="emit('back')">{{ t('Ke halaman masuk') }}</button>
++    </template>
++
++    <form v-else @submit.prevent="submit">
++      <p class="muted">{{ t('Buat website restoran Anda. Pilih template, isi data dasar, dan mulai kelola menu.') }}</p>
++      <p v-if="!configured" class="err">{{ t('Konfigurasi belum lengkap: PUBLIC_SUPABASE_URL / PUBLIC_SUPABASE_ANON_KEY tidak terbaca saat build. Isi di Cloudflare Pages lalu deploy ulang.') }}</p>
++
++      <div v-if="templates.length"><span class="lbl">{{ t('Template') }}</span>
++        <div class="tpl-grid"><label v-for="x in templates" :key="x.id" class="tpl" :class="{ on: tpl === x.id }">
++          <input type="radio" v-model="tpl" :value="x.id" name="tpl" />
++          <img v-if="x.preview_image" :src="media(x.preview_image)" alt="" loading="lazy" /><b>{{ x.name }}</b><small>{{ x.description }}</small>
++        </label></div>
++      </div>
++
++      <label><span>{{ t('Nama restoran') }}</span><input v-model="brand" required maxlength="80" autocomplete="organization" /></label>
++      <label><span>{{ t('Alamat website') }}</span><input v-model="slug" required minlength="3" maxlength="40" pattern="[a-z0-9]+(-[a-z0-9]+)*" autocapitalize="none" spellcheck="false" @input="slugTouched = true" /></label>
++      <p class="hint">https://<b>{{ preview }}</b>
++        <span v-if="avail === 'checking'"> · {{ t('memeriksa…') }}</span><span v-else-if="avail === 'ok'" class="okk"> · {{ t('tersedia') }}</span>
++        <span v-else-if="avail === 'taken'" class="err"> · {{ t('sudah dipakai') }}</span><span v-else-if="avail === 'bad'" class="err"> · {{ t('3–40 huruf kecil, angka, atau tanda hubung') }}</span></p>
++
++      <div class="grid2">
++        <label><span>{{ t('Jenis restoran') }}</span><select v-model="type"><option v-for="(n, k) in TYPES" :key="k" :value="k">{{ n }}</option></select></label>
++        <label><span>{{ t('Bahasa utama website') }}</span><select v-model="siteLang"><option value="id">Bahasa Indonesia</option><option value="en">English</option><option value="zh">简体中文</option></select></label>
++      </div>
++      <label><span>Email</span><input v-model="email" type="email" required autocomplete="username" /></label>
++      <label><span>{{ t('Kata sandi') }}</span><input v-model="pw" type="password" required minlength="8" maxlength="72" autocomplete="new-password" /></label>
++      <div v-if="SITEKEY" class="cf-turnstile" :data-sitekey="SITEKEY" data-callback="__tsDone"></div>
++      <button class="btn" type="submit" :disabled="busy || avail === 'taken' || avail === 'bad' || !configured">{{ t('Daftar') }}</button><p class="err">{{ msg }}</p>
++      <p class="muted"><a href="#" @click.prevent="emit('back')">{{ t('← Sudah punya akun? Masuk') }}</a></p>
++    </form>
++  </section>
++</template>
++<style scoped>
++.wide { max-width: 40rem; margin-top: 5vh; }
++.lbl { font-size: .8rem; font-weight: 600; color: var(--jade); display: block; margin-bottom: .4rem; }
++.tpl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: .75rem; }
++.tpl { display: grid; gap: .25rem; padding: .6rem; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; font-weight: 400; color: var(--ink); }
++.tpl.on { border-color: var(--jade); box-shadow: 0 0 0 2px var(--jade) inset; }
++.tpl input { position: absolute; opacity: 0; pointer-events: none; }
++.tpl img { width: 100%; aspect-ratio: 16/10; object-fit: cover; border-radius: 4px; }
++.tpl small { color: var(--ink2); font-size: .75rem; }
++.okk { color: var(--jade); }
++</style>
+
+--- a/src/lib/admin-en.ts	2026-11-02 00:14:24.000000000 +0000
++++ b/src/lib/admin-en.ts	2026-11-02 07:58:03.134796340 +0000
+@@ -293,5 +293,34 @@
+  "Lihat website ↗": "View website ↗",
+  "Kata sandi saya": "My password",
+  "Keluar": "Sign out",
+- "Akun ini belum terhubung ke restoran mana pun. Hubungi pengelola layanan.": "This account is not linked to any restaurant yet. Contact the service administrator."
++ "Akun ini belum terhubung ke restoran mana pun. Hubungi pengelola layanan.": "This account is not linked to any restaurant yet. Contact the service administrator.",
++ "Daftar restoran": "Register your restaurant",
++ "Ke halaman masuk": "Go to sign in",
++ "Alamat website Anda:": "Your website address:",
++ "Pendaftaran berhasil. Kami mengirim email konfirmasi; buka tautannya lalu masuk ke admin.": "Registration successful. We sent a confirmation email; open the link, then sign in to the admin.",
++ "Pendaftaran berhasil. Silakan masuk ke admin.": "Registration successful. Please sign in to the admin.",
++ "Buat website restoran Anda. Pilih template, isi data dasar, dan mulai kelola menu.": "Create your restaurant website. Pick a template, fill in the basics and start managing your menu.",
++ "Template": "Template",
++ "Nama restoran": "Restaurant name",
++ "Alamat website": "Website address",
++ "Jenis restoran": "Restaurant type",
++ "Bahasa utama website": "Website primary language",
++ "memeriksa…": "checking…",
++ "tersedia": "available",
++ "sudah dipakai": "already taken",
++ "3–40 huruf kecil, angka, atau tanda hubung": "3–40 lowercase letters, digits or hyphens",
++ "Daftar": "Register",
++ "← Sudah punya akun? Masuk": "← Already have an account? Sign in",
++ "Belum punya restoran? Daftar": "No restaurant yet? Register",
++ "Alamat itu sudah dipakai. Pilih yang lain.": "That address is already taken. Choose another.",
++ "Alamat tidak valid atau dicadangkan sistem.": "The address is invalid or reserved.",
++ "Email ini sudah terdaftar. Silakan masuk.": "This email is already registered. Please sign in.",
++ "Email tidak valid.": "Invalid email.",
++ "Kata sandi 8–72 karakter.": "Password must be 8–72 characters.",
++ "Nama restoran 2–80 karakter.": "Restaurant name must be 2–80 characters.",
++ "Verifikasi gagal. Muat ulang halaman dan coba lagi.": "Verification failed. Reload the page and try again.",
++ "Pendaftaran sedang ditutup.": "Registration is currently closed.",
++ "Template tidak tersedia.": "Template unavailable.",
++ "Pendaftaran gagal. Coba lagi beberapa saat lagi.": "Registration failed. Please try again shortly.",
++ "Tidak bisa menghubungi server. Periksa koneksi internet.": "Cannot reach the server. Check your internet connection.",
+ };
+
+--- a/supabase/06-dapora-platform.sql	1970-01-01 00:00:00.000000000 +0000
++++ b/supabase/06-dapora-platform.sql	2026-11-02 07:55:41.352068231 +0000
+@@ -0,0 +1,148 @@
++-- 06-dapora-platform.sql — fondasi SaaS Dapora (aman diulang). Jalankan SETELAH 05-tampilan.sql.
++-- Isi: pengaturan domain dasar, tabel template, slug cadangan, subdomain bawaan otomatis lewat tenant_domains,
++--      pengaman domain kustom, create_tenant() (hanya service_role), slug_available() (untuk form daftar).
++
++-- ---------- pengaturan platform ----------
++create table if not exists public.platform_settings (key text primary key, value text not null);
++alter table public.platform_settings enable row level security;   -- tanpa policy: hanya fungsi security definer / service_role
++insert into public.platform_settings (key, value) values ('base_domain', 'kokofibo.it.com') on conflict (key) do nothing;
++
++-- ---------- template ----------
++create table if not exists public.templates (
++  id text primary key check (id ~ '^[a-z0-9]+(-[a-z0-9]+)*$'),
++  name text not null,
++  description text,
++  preview_image text,
++  restaurant_types text[] not null default array['vegan', 'vegetarian', 'umum'],
++  is_active boolean not null default true,
++  sort int4 not null default 0
++);
++alter table public.templates enable row level security;
++drop policy if exists "publik baca template" on public.templates;
++create policy "publik baca template" on public.templates for select to anon, authenticated using (is_active);
++insert into public.templates (id, name, description, sort) values ('aisin', 'Aisin', 'Tenang dan elegan, cocok untuk restoran vegetarian/vegan.', 1) on conflict (id) do nothing;
++
++alter table public.tenants add column if not exists template_id text not null default 'aisin' references public.templates(id);
++
++-- ---------- slug cadangan (tidak boleh jadi subdomain restoran) ----------
++create table if not exists public.reserved_slugs (slug text primary key);
++alter table public.reserved_slugs enable row level security;
++insert into public.reserved_slugs (slug) values
++  ('admin'), ('www'), ('api'), ('app'), ('dashboard'), ('login'), ('signup'), ('auth'), ('mail'), ('smtp'), ('imap'), ('ftp'),
++  ('cdn'), ('static'), ('assets'), ('images'), ('media'), ('status'), ('support'), ('help'), ('docs'), ('blog'), ('billing'),
++  ('dapora'), ('cname'), ('proxy'), ('staging'), ('dev'), ('test'), ('demo'), ('preview')
++on conflict do nothing;
++
++create or replace function public.tenants_cek_slug() returns trigger language plpgsql as $$
++begin
++  if exists (select 1 from public.reserved_slugs r where r.slug = new.slug) then
++    raise exception 'Slug "%" dicadangkan sistem', new.slug using errcode = 'check_violation';
++  end if;
++  if char_length(new.slug) not between 3 and 40 then
++    raise exception 'Slug harus 3–40 karakter' using errcode = 'check_violation';
++  end if;
++  return new;
++end $$;
++drop trigger if exists tenants_slug_dicek on public.tenants;
++create trigger tenants_slug_dicek before insert on public.tenants for each row execute function public.tenants_cek_slug();
++
++-- ---------- subdomain bawaan: <slug>.<base_domain> masuk tenant_domains otomatis ----------
++create or replace function public.tenants_domain_bawaan() returns trigger language plpgsql security definer set search_path = public as $$
++declare v_base text;
++begin
++  select value into v_base from public.platform_settings where key = 'base_domain';
++  if v_base is null then return new; end if;
++  insert into public.tenant_domains (tenant_id, hostname, kind, is_primary, status, verified_at)
++  values (new.id, new.slug || '.' || v_base, 'subdomain', not exists (select 1 from public.tenant_domains d where d.tenant_id = new.id and d.is_primary), 'active', now())
++  on conflict (hostname) do nothing;
++  return new;
++end $$;
++drop trigger if exists tenants_domain_bawaan_dibuat on public.tenants;
++create trigger tenants_domain_bawaan_dibuat after insert on public.tenants for each row execute function public.tenants_domain_bawaan();
++
++-- isi ulang untuk restoran yang sudah ada (mis. aisin)
++insert into public.tenant_domains (tenant_id, hostname, kind, is_primary, status, verified_at)
++select t.id, t.slug || '.' || b.value, 'subdomain',
++       not exists (select 1 from public.tenant_domains d where d.tenant_id = t.id and d.is_primary), 'active', now()
++from public.tenants t cross join (select value from public.platform_settings where key = 'base_domain') b
++where not exists (select 1 from public.tenant_domains d where d.tenant_id = t.id and d.kind = 'subdomain')
++on conflict (hostname) do nothing;
++
++-- ---------- pengaman: domain kustom tidak boleh menyamar sebagai domain platform ----------
++create or replace function public.tenant_domains_cek() returns trigger language plpgsql security definer set search_path = public as $$
++declare v_base text; v_slug text;
++begin
++  select value into v_base from public.platform_settings where key = 'base_domain';
++  if new.kind = 'custom' then
++    if new.hostname like '%*%' then raise exception 'Domain wildcard tidak didukung' using errcode = 'check_violation'; end if;
++    if v_base is not null and (new.hostname = v_base or new.hostname like '%.' || v_base) then
++      raise exception 'Domain kustom tidak boleh berada di bawah %', v_base using errcode = 'check_violation';
++    end if;
++  else
++    select slug into v_slug from public.tenants where id = new.tenant_id;
++    if v_base is null or new.hostname <> v_slug || '.' || v_base then
++      raise exception 'Subdomain bawaan harus <slug>.<base_domain>' using errcode = 'check_violation';
++    end if;
++  end if;
++  return new;
++end $$;
++drop trigger if exists tenant_domains_dicek on public.tenant_domains;
++create trigger tenant_domains_dicek before insert or update of hostname, kind on public.tenant_domains for each row execute function public.tenant_domains_cek();
++
++-- ---------- data publik: tambah template_id (tanpa menimpa versi dari 05-tampilan.sql) ----------
++-- Versi asli diganti nama menjadi tenant_public_json_base; fungsi baru menambahkan 'template_id' di atasnya.
++-- Aman diulang, dan tetap benar bila 05 dijalankan ulang lalu 06 dijalankan lagi.
++do $$ begin
++  if to_regprocedure('public.tenant_public_json(uuid)') is not null
++     and pg_get_functiondef('public.tenant_public_json(uuid)'::regprocedure) not like '%tenant_public_json_base%' then
++    drop function if exists public.tenant_public_json_base(uuid);
++    alter function public.tenant_public_json(uuid) rename to tenant_public_json_base;
++  end if;
++end $$;
++create or replace function public.tenant_public_json(p_id uuid) returns jsonb language sql stable security definer set search_path = public as $$
++  select public.tenant_public_json_base(p_id) || jsonb_build_object('template_id', (select t.template_id from public.tenants t where t.id = p_id))
++$$;
++
++-- ---------- form daftar: slug tersedia? ----------
++create or replace function public.slug_available(p_slug text) returns boolean language sql stable security definer set search_path = public as $$
++  select p_slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and char_length(p_slug) between 3 and 40
++     and not exists (select 1 from public.reserved_slugs where slug = p_slug)
++     and not exists (select 1 from public.tenants where slug = p_slug)
++$$;
++grant execute on function public.slug_available(text) to anon, authenticated;
++
++-- ---------- buat restoran baru (HANYA dari server dengan service_role) ----------
++create or replace function public.create_tenant(
++  p_owner uuid, p_slug text, p_brand text, p_template text default 'aisin',
++  p_type text default 'umum', p_lang text default 'id', p_plan text default 'basic'
++) returns uuid language plpgsql security definer set search_path = public as $$
++declare v_id uuid;
++begin
++  if not exists (select 1 from auth.users where id = p_owner) then raise exception 'Pemilik tidak ditemukan'; end if;
++  if not exists (select 1 from public.templates where id = p_template and is_active) then raise exception 'Template tidak tersedia'; end if;
++  insert into public.tenants (slug, restaurant_type, template_id) values (lower(p_slug), p_type, p_template) returning id into v_id;  -- trigger membuat <slug>.<base_domain>
++  insert into public.tenant_languages (tenant_id, lang, position) values (v_id, p_lang, 1);
++  insert into public.tenant_translations (tenant_id, lang, brand_name) values (v_id, p_lang, btrim(p_brand));
++  insert into public.tenant_members (tenant_id, user_id, role) values (v_id, p_owner, 'owner');
++  insert into public.subscriptions (tenant_id, plan_code, status, current_period_start, current_period_end)
++  values (v_id, p_plan, 'trial', current_date, current_date + 14);
++  return v_id;
++end $$;
++revoke all on function public.create_tenant(uuid, text, text, text, text, text, text) from public, anon, authenticated;
++grant execute on function public.create_tenant(uuid, text, text, text, text, text, text) to service_role;
++
++-- ---------- pindah domain dasar (mis. kokofibo.it.com → dapora.com) ----------
++-- Jalankan HANYA setelah wildcard DNS + Worker route untuk domain baru aktif. Domain kustom pelanggan tidak berubah.
++-- Pemakaian:  select public.rebase_subdomains('dapora.com');
++create or replace function public.rebase_subdomains(p_new_base text) returns int language plpgsql security definer set search_path = public as $$
++declare v_n int;
++begin
++  if p_new_base !~ '^[a-z0-9]+([.-][a-z0-9]+)*\.[a-z]{2,}$' then raise exception 'Domain dasar tidak valid'; end if;
++  update public.platform_settings set value = p_new_base where key = 'base_domain';   -- dulu: trigger pengaman memakai nilai ini
++  update public.tenant_domains d set hostname = t.slug || '.' || p_new_base
++    from public.tenants t where t.id = d.tenant_id and d.kind = 'subdomain';
++  get diagnostics v_n = row_count;
++  return v_n;
++end $$;
++revoke all on function public.rebase_subdomains(text) from public, anon, authenticated;
++grant execute on function public.rebase_subdomains(text) to service_role;

@@ -37,6 +37,7 @@ async function sendReset() { busy.value = true; msg.value = ''; await forgotApi(
         <button class="btn" type="submit" :disabled="busy">{{ t('Masuk') }}</button><p class="err">{{ msg }}</p>
       </form>
       <p class="muted"><a href="#" @click.prevent="forgot = true; sent = false">{{ t('Lupa kata sandi? (khusus Owner)') }}</a></p>
+      <p class="muted"><a href="#daftar">{{ t('Belum punya restoran? Daftar') }}</a></p>
     </template>
     <template v-else>
       <p class="muted">{{ t('Khusus Owner. Masukkan email Anda; jika terdaftar sebagai Owner, tautan untuk membuat kata sandi baru akan dikirim. Staf yang lupa kata sandi: minta Owner restoran untuk meresetnya.') }}</p>

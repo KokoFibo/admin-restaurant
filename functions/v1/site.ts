@@ -2,7 +2,7 @@ import { buildSite, db, json, validHost, validSlug } from '../../server/v1';
 
 /**
  * GET /v1/site?host=<domain>&slug=<opsional> → Site (lihat API-CONTRACT.md). 404 = domain tidak dikenal.
- * Restoran HANYA dicari lewat tabel tenant_domains (subdomain bawaan <slug>.kokofibo.it.com maupun domain kustom).
+ * Restoran HANYA dicari lewat tabel tenant_domains (subdomain bawaan <slug>.<domain-dasar> maupun domain kustom).
  * Slug hanya dilayani bila ALLOW_SLUG_FALLBACK=true (pratinjau/pengembangan); jangan diaktifkan di produksi.
  */
 export const onRequestGet = async ({ request, env: e }: any) => {

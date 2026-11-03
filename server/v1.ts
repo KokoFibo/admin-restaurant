@@ -80,7 +80,7 @@ export function buildSite(e: any, raw: any, content: any) {
     return { id: b.id, kind: b.kind, scope: b.scope, link_url: b.link_url ?? null, blocks_orders: b.blocks_orders === true, rev: b.rev, text: pickMap(b.texts, x => x?.message), link_label: Object.keys(labels).length ? labels : null };
   });
   return {
-    id: raw.id, slug: raw.slug, status: raw.status, restaurant_type: raw.restaurant_type, languages: raw.languages ?? ['id'], translations: raw.translations ?? {},
+    id: raw.id, slug: raw.slug, status: raw.status, restaurant_type: raw.restaurant_type, template_id: raw.template_id ?? 'aisin', languages: raw.languages ?? ['id'], translations: raw.translations ?? {},
     phone: raw.phone ?? null, whatsapp: raw.whatsapp ?? null, email: raw.email ?? null, maps_url: raw.maps_url ?? null, address: raw.address ?? null, opening_hours: raw.opening_hours ?? null,
     primary_color: null, theme: resolveTheme(raw), orders_open: content?.orders_open !== false,
     hero: { texts, image: mediaUrl(e, content?.images?.hero) }, banners,

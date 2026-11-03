@@ -89,18 +89,19 @@ end $$;
 drop trigger if exists tenant_domains_dicek on public.tenant_domains;
 create trigger tenant_domains_dicek before insert or update of hostname, kind on public.tenant_domains for each row execute function public.tenant_domains_cek();
 
--- ---------- data publik: tambah template_id ----------
+-- ---------- data publik: tambah template_id (tanpa menimpa versi dari 05-tampilan.sql) ----------
+-- Versi asli diganti nama menjadi tenant_public_json_base; fungsi baru menambahkan 'template_id' di atasnya.
+-- Aman diulang, dan tetap benar bila 05 dijalankan ulang lalu 06 dijalankan lagi.
+do $$ begin
+  if to_regprocedure('public.tenant_public_json(uuid)') is not null
+     and pg_get_functiondef('public.tenant_public_json(uuid)'::regprocedure) not like '%tenant_public_json_base%' then
+    drop function if exists public.tenant_public_json_base(uuid);
+    alter function public.tenant_public_json(uuid) rename to tenant_public_json_base;
+  end if;
+end $$;
 create or replace function public.tenant_public_json(p_id uuid) returns jsonb language sql stable security definer set search_path = public as $$
-  select jsonb_build_object(
-    'id', t.id, 'slug', t.slug, 'status', t.status, 'restaurant_type', t.restaurant_type, 'template_id', t.template_id,
-    'phone', t.phone, 'whatsapp', t.whatsapp, 'email', t.email, 'maps_url', t.maps_url, 'address', t.address,
-    'opening_hours', t.opening_hours, 'primary_color', t.primary_color,
-    'languages', coalesce((select jsonb_agg(l.lang order by l.position) from public.tenant_languages l where l.tenant_id = t.id), '[]'::jsonb),
-    'translations', coalesce((select jsonb_object_agg(x.lang, jsonb_build_object('brand_name', x.brand_name, 'tagline', x.tagline))
-                              from public.tenant_translations x where x.tenant_id = t.id), '{}'::jsonb))
-  from public.tenants t where t.id = p_id
+  select public.tenant_public_json_base(p_id) || jsonb_build_object('template_id', (select t.template_id from public.tenants t where t.id = p_id))
 $$;
--- CATATAN: bila 05-tampilan.sql sudah mendefinisikan ulang tenant_public_json, gabungkan kunci 'template_id' ke versi terbaru itu.
 
 -- ---------- form daftar: slug tersedia? ----------
 create or replace function public.slug_available(p_slug text) returns boolean language sql stable security definer set search_path = public as $$
