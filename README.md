@@ -65,4 +65,4 @@ Website restoran (frontend Astro) hanya berbicara dengan API ini, tidak dengan S
 
 **Diuji** terhadap Postgres sungguhan lewat PostgREST (lapisan HTTP yang dipakai Supabase): 55 pemeriksaan API (bentuk data, tema preset/kustom/gelap, banner dan zona waktu, tutup sementara, banner Libur, hidangan habis, restoran nonaktif, validasi masukan, kode galat) plus rantai penuh frontend → API → database (tema, hero, banner, unggulan, menu, meja, pesanan, `E:closed`).
 
-<!-- ok -->
+<!-- ok1 -->

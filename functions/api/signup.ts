@@ -30,11 +30,17 @@ function corsHeaders(request: Request, e: any): Record<string, string> {
 const reply = (request: Request, e: any, o: unknown, status = 200) =>
   new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...corsHeaders(request, e) } });
 
-async function turnstileOk(secret: string, token: string, ip: string | null) {
-  if (!token) return false;
+/** Verifikasi token Turnstile. `reason` memudahkan diagnosis (mis. invalid-input-secret, invalid-input-response, timeout-or-duplicate, missing_token). */
+async function turnstileCheck(secret: string, token: string, ip: string | null): Promise<{ ok: boolean; reason?: string }> {
+  if (!token) { console.error('turnstile: token kosong (website tidak mengirim cf_token; VITE_TURNSTILE_SITEKEY belum terpasang di build?)'); return { ok: false, reason: 'missing_token' }; }
   const body = new URLSearchParams({ secret, response: token }); if (ip) body.set('remoteip', ip);
   const r = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body, signal: AbortSignal.timeout(8000) }).catch(() => null);
-  return !!r && (await r.json().catch(() => ({}))).success === true;
+  if (!r) { console.error('turnstile: siteverify tidak terjangkau'); return { ok: false, reason: 'unreachable' }; }
+  const j: any = await r.json().catch(() => ({}));
+  if (j.success === true) return { ok: true };
+  const codes: string[] = Array.isArray(j['error-codes']) ? j['error-codes'] : [];
+  console.error('turnstile ditolak:', codes.join(',') || 'tanpa kode', '| hostname:', j.hostname || '-');
+  return { ok: false, reason: codes[0] || 'verify_failed' };
 }
 
 export const onRequestOptions = ({ request, env: e }: any) => new Response(null, { status: 204, headers: corsHeaders(request, e) });
@@ -66,7 +72,10 @@ export const onRequestPost = async ({ request, env: e }: any) => {
   if (!TYPES.includes(type) || !LANGS.includes(lang) || !/^[a-z0-9-]{1,40}$/.test(template)) return json({ error: 'bad_request' }, 400);
 
   const secret = env(e, 'TURNSTILE_SECRET');
-  if (secret && !(await turnstileOk(secret, String(b.cf_token || ''), request.headers.get('cf-connecting-ip')))) return json({ error: 'captcha_failed' }, 400);
+  if (secret) {
+    const c = await turnstileCheck(secret, String(b.cf_token || ''), request.headers.get('cf-connecting-ip'));
+    if (!c.ok) return json({ error: 'captcha_failed', reason: c.reason }, 400);
+  }
 
   const admin = createClient(url, service, { auth: { persistSession: false } });
   const free = await admin.rpc('slug_available', { p_slug: slug });

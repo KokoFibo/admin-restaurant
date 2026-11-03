@@ -1,5 +1,9 @@
 node_modules
 dist
+# Semua file lingkungan diabaikan, kecuali contoh yang memang untuk di-commit
 .env
+.env.*
+!.env.example
 .dev.vars
-# .env.additions
+.dev.vars.*
+!.dev.vars.example

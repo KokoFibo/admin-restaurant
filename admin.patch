@@ -1,4 +1,49 @@
 
+--- a/.env.example	2026-11-02 00:14:24.000000000 +0000
++++ b/.env.example	2026-11-03 04:50:28.592226705 +0000
+@@ -3,7 +3,7 @@
+ PUBLIC_SUPABASE_ANON_KEY=eyJ...           # anon/publishable key, BUKAN service_role
+ PUBLIC_MEDIA_URL=https://images.kokofibo.com   # alamat publik bucket Cloudflare R2
+ # Domain dasar website restoran tanpa domain sendiri: https://<slug>.<PUBLIC_BASE_DOMAIN> (nanti ganti ke dapora.com)
+-PUBLIC_BASE_DOMAIN=kokofibo.com
++PUBLIC_BASE_DOMAIN=kokofibo.it.com
+ 
+ # ===== Rahasia (hanya Functions; di Cloudflare simpan sebagai Secret, jangan diberi awalan PUBLIC_) =====
+ GEMINI_API_KEY=AIza...
+@@ -14,3 +14,19 @@
+ R2_SECRET_ACCESS_KEY=...
+ SUPABASE_SERVICE_ROLE_KEY=...             # membuat/mengelola akun, lupa kata sandi
+ # Functions membaca PUBLIC_SUPABASE_URL dan PUBLIC_SUPABASE_ANON_KEY dari variabel yang sama.
++
++# ===== Dapora: pendaftaran mandiri (Functions) =====
++# Isi NILAI ASLI hanya di Cloudflare Pages (Secret) atau .dev.vars lokal (sudah di-gitignore). File ini hanya contoh dan ikut ter-commit.
++SIGNUP_ENABLED=true                       # wajib agar /api/signup aktif; bawaan mati
++SIGNUP_ALLOWED_ORIGINS=https://kokofibo.it.com   # origin website pemasaran yang boleh memanggil /api/signup (CORS); koma untuk beberapa
++SIGNUP_AUTO_CONFIRM=false                 # false = kirim email konfirmasi (butuh SMTP kustom di Supabase); true = langsung aktif (hanya uji)
++# SIGNUP_PLAN=basic
++# TURNSTILE_SECRET=...                    # Secret; sangat disarankan di produksi (pasangannya VITE_TURNSTILE_SITEKEY di website)
++# ALLOW_SLUG_FALLBACK=false               # pratinjau saja; JANGAN true di produksi
++
++# ===== Dapora: domain kustom (OPSIONAL; Cloudflare for SaaS, custom hostname persis) =====
++# CF_SAAS_ENABLED=true
++# CF_ZONE_ID=...                          # zona domain dasar
++# CF_CNAME_TARGET=cname.kokofibo.it.com
++# CF_MAX_CUSTOM_DOMAINS=1
++# CF_API_TOKEN=...                        # Secret. Izin minimal: SSL and Certificates: Edit (zona domain dasar)
+
+--- a/.gitignore	2026-11-02 00:14:24.000000000 +0000
++++ b/.gitignore	2026-11-03 04:50:28.592486547 +0000
+@@ -1,4 +1,9 @@
+ node_modules
+ dist
++# Semua file lingkungan diabaikan, kecuali contoh yang memang untuk di-commit
+ .env
++.env.*
++!.env.example
+ .dev.vars
++.dev.vars.*
++!.dev.vars.example
+
 --- a/functions/api/domains.ts	1970-01-01 00:00:00.000000000 +0000
 +++ b/functions/api/domains.ts	2026-11-02 07:58:03.507630071 +0000
 @@ -0,0 +1,96 @@
@@ -100,8 +145,8 @@
 +};
 
 --- a/functions/api/signup.ts	1970-01-01 00:00:00.000000000 +0000
-+++ b/functions/api/signup.ts	2026-11-02 23:47:23.107130907 +0000
-@@ -0,0 +1,100 @@
++++ b/functions/api/signup.ts	2026-11-03 04:58:56.116010055 +0000
+@@ -0,0 +1,109 @@
 +import { createClient } from '@supabase/supabase-js';
 +import { env } from '../../server/env';
 +
@@ -134,11 +179,17 @@
 +const reply = (request: Request, e: any, o: unknown, status = 200) =>
 +  new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...corsHeaders(request, e) } });
 +
-+async function turnstileOk(secret: string, token: string, ip: string | null) {
-+  if (!token) return false;
++/** Verifikasi token Turnstile. `reason` memudahkan diagnosis (mis. invalid-input-secret, invalid-input-response, timeout-or-duplicate, missing_token). */
++async function turnstileCheck(secret: string, token: string, ip: string | null): Promise<{ ok: boolean; reason?: string }> {
++  if (!token) { console.error('turnstile: token kosong (website tidak mengirim cf_token; VITE_TURNSTILE_SITEKEY belum terpasang di build?)'); return { ok: false, reason: 'missing_token' }; }
 +  const body = new URLSearchParams({ secret, response: token }); if (ip) body.set('remoteip', ip);
 +  const r = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body, signal: AbortSignal.timeout(8000) }).catch(() => null);
-+  return !!r && (await r.json().catch(() => ({}))).success === true;
++  if (!r) { console.error('turnstile: siteverify tidak terjangkau'); return { ok: false, reason: 'unreachable' }; }
++  const j: any = await r.json().catch(() => ({}));
++  if (j.success === true) return { ok: true };
++  const codes: string[] = Array.isArray(j['error-codes']) ? j['error-codes'] : [];
++  console.error('turnstile ditolak:', codes.join(',') || 'tanpa kode', '| hostname:', j.hostname || '-');
++  return { ok: false, reason: codes[0] || 'verify_failed' };
 +}
 +
 +export const onRequestOptions = ({ request, env: e }: any) => new Response(null, { status: 204, headers: corsHeaders(request, e) });
@@ -170,7 +221,10 @@
 +  if (!TYPES.includes(type) || !LANGS.includes(lang) || !/^[a-z0-9-]{1,40}$/.test(template)) return json({ error: 'bad_request' }, 400);
 +
 +  const secret = env(e, 'TURNSTILE_SECRET');
-+  if (secret && !(await turnstileOk(secret, String(b.cf_token || ''), request.headers.get('cf-connecting-ip')))) return json({ error: 'captcha_failed' }, 400);
++  if (secret) {
++    const c = await turnstileCheck(secret, String(b.cf_token || ''), request.headers.get('cf-connecting-ip'));
++    if (!c.ok) return json({ error: 'captcha_failed', reason: c.reason }, 400);
++  }
 +
 +  const admin = createClient(url, service, { auth: { persistSession: false } });
 +  const free = await admin.rpc('slug_available', { p_slug: slug });
