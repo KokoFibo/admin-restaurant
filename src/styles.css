@@ -39,3 +39,7 @@ fieldset{border:1px solid var(--line);border-radius:6px;padding:1rem;display:gri
 .badge.live{background:var(--jade);color:#fff}.badge.holiday{background:var(--vm);color:#fff}
 .star{background:none;border:0;cursor:pointer;font-size:1.15rem;line-height:1;color:var(--ink2)}.star.on{color:var(--gold)}
 .pausebtn.on{background:var(--vm);border-color:var(--vm);color:#fff}
+
+.adm .panel.dz{border-color:var(--vm)}.adm .panel.dz h3{color:var(--vm)}
+.purge{display:grid;gap:1rem}.purge .rad{display:flex;gap:.5rem;align-items:center;font-weight:500}.purge .tscroll{overflow-x:auto;max-height:40vh}
+.purge .warn{color:var(--vm);font-weight:600}.purge .okmsg{color:var(--jade);font-weight:600}

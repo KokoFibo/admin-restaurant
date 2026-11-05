@@ -66,3 +66,13 @@ Website restoran (frontend Astro) hanya berbicara dengan API ini, tidak dengan S
 **Diuji** terhadap Postgres sungguhan lewat PostgREST (lapisan HTTP yang dipakai Supabase): 55 pemeriksaan API (bentuk data, tema preset/kustom/gelap, banner dan zona waktu, tutup sementara, banner Libur, hidangan habis, restoran nonaktif, validasi masukan, kode galat) plus rantai penuh frontend → API → database (tema, hero, banner, unggulan, menu, meja, pesanan, `E:closed`).
 
 <!-- ok1 -->
+
+## Hapus data tenant (khusus Super Admin)
+
+Tab **Restoran** → panel **Hapus data tenant** (hanya tampil untuk Super Admin). Dua pilihan: **satu tenant tertentu** atau **semua tenant**.
+
+1. Pilih cakupan → **Lihat yang akan dihapus** (hitungan pesanan, menu, kategori, meja, akun, jumlah foto di R2; tidak mengubah apa pun).
+2. Opsional: hapus juga foto di R2, dan hapus juga akun login. Akun Super Admin dan akun yang sedang dipakai tidak pernah ikut terhapus. Akun yang juga anggota restoran lain yang dipertahankan tidak dihapus. Pada "semua tenant", semua akun selain Super Admin ikut (termasuk akun tanpa restoran).
+3. Ketik **slug restoran** (satu tenant) atau **HAPUS SEMUA** (semua tenant) untuk mengaktifkan tombol hapus. Teks ini dicek ulang di server.
+
+Pasang: jalankan `supabase/08-hapus-tenant.sql` di SQL Editor (aman diulang). Fungsi `purge_preview` / `purge_tenants` hanya bisa dipanggil `service_role`; `/api/purge` memastikan pemanggil Super Admin (`is_platform_admin`) sebelum memanggilnya. Penghapusan database berjalan dalam **satu transaksi** (gagal = tidak ada yang berubah). Foto R2 dihapus per halaman setelahnya dan hanya di jalur `restaurant/tenants/…` dan `tenants/<uuid>/…`; bila terhenti, tombol **Ulangi hapus foto** tersedia. Butuh `R2_*` dan `SUPABASE_SERVICE_ROLE_KEY` (sudah ada).

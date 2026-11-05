@@ -29,3 +29,10 @@ export async function usersApi(body: any): Promise<any> {
 export async function forgotApi(email: string): Promise<void> {
   await fetch('/api/forgot', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email }) });
 }
+/** Hapus data tenant (khusus Super Admin; dicek lagi di server dan database). */
+export async function purgeApi(body: any): Promise<any> {
+  const r = await fetch('/api/purge', { method: 'POST', headers: { 'content-type': 'application/json', ...(await authHeader()) }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error((j.error || t('Gagal menghapus')) + (j.detail ? ` (${j.detail})` : ''));
+  return j;
+}

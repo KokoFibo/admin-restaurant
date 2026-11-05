@@ -5,6 +5,7 @@ import { sb } from '../lib/supabase';
 import { translate, trErr } from '../lib/api';
 import { S, TYPES, TYPE_DEFAULTS, optionMeta, enabled, lim, load, toast } from '../store';
 import Field from './Field.vue';
+import PurgePanel from './PurgePanel.vue';
 const p = reactive<any>({ phone: '', wa: '', email: '', maps: '', address: '', lunch: '', tea: '', dinner: '', tr: {} }), mst = reactive<any>({ type: 'vegan', alang: 'id', l1: 'id', l2: '', tz: 'Asia/Jakarta', opts: {} });
 const pMsg = ref(''), mMsg = ref('');
 function init() {
@@ -63,5 +64,6 @@ async function saveMaster() {
       <p class="hint">{{ t('Maksimal 2 bahasa. Terjemahan bahasa yang dinonaktifkan tidak dihapus.') }}</p>
       <p class="err">{{ mMsg }}</p><div class="row"><button class="btn vm" type="submit">{{ t('Simpan pengaturan master') }}</button></div></form>
     <p v-else class="hint">{{ t('Tipe restoran: {0} · Bahasa: {1}. Perubahan dilakukan oleh Super Admin.', TYPES[S.T.restaurant_type], S.TL.map((c: string) => lim(c).name_native).join(', ')) }}</p>
+    <PurgePanel v-if="S.isMaster" />
   </div>
 </template>
