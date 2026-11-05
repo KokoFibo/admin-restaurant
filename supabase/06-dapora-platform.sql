@@ -5,7 +5,7 @@
 -- ---------- pengaturan platform ----------
 create table if not exists public.platform_settings (key text primary key, value text not null);
 alter table public.platform_settings enable row level security;   -- tanpa policy: hanya fungsi security definer / service_role
-insert into public.platform_settings (key, value) values ('base_domain', 'kokofibo.it.com') on conflict (key) do nothing;
+insert into public.platform_settings (key, value) values ('base_domain', 'dapora.id') on conflict (key) do nothing;
 
 -- ---------- template ----------
 create table if not exists public.templates (
@@ -131,9 +131,9 @@ end $$;
 revoke all on function public.create_tenant(uuid, text, text, text, text, text, text) from public, anon, authenticated;
 grant execute on function public.create_tenant(uuid, text, text, text, text, text, text) to service_role;
 
--- ---------- pindah domain dasar (mis. kokofibo.it.com → dapora.com) ----------
+-- ---------- pindah domain dasar (mis. dapora.id → domain lain) ----------
 -- Jalankan HANYA setelah wildcard DNS + Worker route untuk domain baru aktif. Domain kustom pelanggan tidak berubah.
--- Pemakaian:  select public.rebase_subdomains('dapora.com');
+-- Pemakaian:  select public.rebase_subdomains('dapora.id');
 create or replace function public.rebase_subdomains(p_new_base text) returns int language plpgsql security definer set search_path = public as $$
 declare v_n int;
 begin

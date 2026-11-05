@@ -1,6 +1,6 @@
-# Backend admin — admin.kokofibo.com (nanti admin.dapora.com)
+# Backend admin — admin.dapora.id
 
-Aplikasi admin (Vue 3 + Vite) terpisah dari website. **Satu alamat untuk semua restoran**: owner dan staf membuka `admin.kokofibo.com`, login, lalu sistem membaca restoran dan role dari akun (tabel `tenant_members`). Nama host tidak dipakai untuk menentukan restoran.
+Aplikasi admin (Vue 3 + Vite) terpisah dari website. **Satu alamat untuk semua restoran**: owner dan staf membuka `admin.dapora.id`, login, lalu sistem membaca restoran dan role dari akun (tabel `tenant_members`). Nama host tidak dipakai untuk menentukan restoran.
 
 - **Database & login**: Supabase (`supabase/*.sql`, urutan 00 → 01 → 02 → 03 → 04 → **05**).
 - **Foto**: Cloudflare R2 lewat `/api/upload` (menu 4:3 ≤60 KB; hero 4:5 ≤140 KB).
@@ -24,11 +24,11 @@ Staf hanya boleh di **satu** restoran. Akun nonaktif tidak bisa login dan akses 
 1. Supabase SQL Editor: jalankan `00` → `01` → `02` → `03` → `04` → `05` (04 dan 05 aman diulang). Restoran dan owner baru dibuat manual lewat SQL dulu (nanti lewat sistem SaaS).
 2. `cp .env.example .env`, isi. `PUBLIC_*` ikut ke browser; sisanya rahasia server.
 3. Cloudflare Pages: build `npm run build`, output `dist`. **`PUBLIC_*` harus sudah terisi SEBELUM build** (Vite menanamkannya ke kode saat build): isi sebagai variabel biasa (Plain text, bukan Secret) untuk lingkungan Production, lalu **deploy ulang** setiap kali nilainya diubah. Bila kosong, halaman login menampilkan peringatan konfigurasi.
-   Selain itu: isi variabel di _Settings → Variables and Secrets_ (rahasia sebagai **Secret**). _Custom domain_: `admin.kokofibo.com`.
-4. Supabase → Authentication → URL Configuration: tambahkan `https://admin.kokofibo.com` (Site URL & Redirect URLs).
+   Selain itu: isi variabel di _Settings → Variables and Secrets_ (rahasia sebagai **Secret**). _Custom domain_: `admin.dapora.id`.
+4. Supabase → Authentication → URL Configuration: tambahkan `https://admin.dapora.id` (Site URL & Redirect URLs).
 5. **Lupa kata sandi (khusus Owner)** butuh SMTP: Supabase → Authentication → SMTP Settings (mis. Resend). Tanpa SMTP, email bawaan Supabase sangat dibatasi.
-6. Alamat website tiap restoran: domain sendiri → isi `tenant_domains` (status `active`); tanpa domain → otomatis `https://<slug>.<PUBLIC_BASE_DOMAIN>`. Slug `admin`, `www`, `api` dilarang. Wildcard DNS `*.kokofibo.com` + frontend yang mengenali slug = urusan proyek frontend (lihat `HANDOFF-FRONTEND.md`).
-7. Pindah ke dapora.com: ganti `PUBLIC_BASE_DOMAIN`, pasang `admin.dapora.com`, daftarkan di Redirect URLs. Semua pengguna login ulang (sesi per-origin).
+6. Alamat website tiap restoran: domain sendiri → isi `tenant_domains` (status `active`); tanpa domain → otomatis `https://<slug>.<PUBLIC_BASE_DOMAIN>`. Slug `admin`, `www`, `api` dilarang. Wildcard DNS `*.dapora.id` + frontend yang mengenali slug = urusan proyek frontend (lihat `HANDOFF-FRONTEND.md`).
+7. Bila kelak pindah domain: ganti `PUBLIC_BASE_DOMAIN`, pasang `admin.<domain-baru>`, daftarkan di Redirect URLs. Semua pengguna login ulang (sesi per-origin).
 
 ## Lokal
 
@@ -61,7 +61,7 @@ Website restoran (frontend Astro) hanya berbicara dengan API ini, tidak dengan S
 
 **Variabel yang dibaca API saat berjalan** (Cloudflare Pages → Settings → Variables): `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY`, `PUBLIC_MEDIA_URL` (untuk membentuk URL foto dari kunci R2), `PUBLIC_BASE_DOMAIN`.
 
-**Alamat API untuk frontend (`API_URL`)**: paling cepat `https://admin.kokofibo.com` (proyek yang sama). Disarankan menambahkan custom domain `api.kokofibo.com` ke proyek Pages yang sama lalu memakai `API_URL=https://api.kokofibo.com` (slug `api` sudah dicadangkan di database). Pesanan sudah dibatasi laju di database (per meja); untuk perlindungan tambahan pasang aturan rate limiting Cloudflare pada `/v1/orders`.
+**Alamat API untuk frontend (`API_URL`)**: paling cepat `https://admin.dapora.id` (proyek yang sama). Disarankan menambahkan custom domain `api.dapora.id` ke proyek Pages yang sama lalu memakai `API_URL=https://api.dapora.id` (slug `api` sudah dicadangkan di database). Pesanan sudah dibatasi laju di database (per meja); untuk perlindungan tambahan pasang aturan rate limiting Cloudflare pada `/v1/orders`.
 
 **Diuji** terhadap Postgres sungguhan lewat PostgREST (lapisan HTTP yang dipakai Supabase): 55 pemeriksaan API (bentuk data, tema preset/kustom/gelap, banner dan zona waktu, tutup sementara, banner Libur, hidangan habis, restoran nonaktif, validasi masukan, kode galat) plus rantai penuh frontend → API → database (tema, hero, banner, unggulan, menu, meja, pesanan, `E:closed`).
 

@@ -1,9 +1,9 @@
 /**
  * MODUL OPSIONAL — domain kustom pelanggan lewat Cloudflare for SaaS (custom hostname PERSIS, bukan wildcard).
- * Nonaktif kecuali CF_SAAS_ENABLED=true. Tanpa modul ini, Dapora tetap berjalan penuh dengan <slug>.kokofibo.it.com.
+ * Nonaktif kecuali CF_SAAS_ENABLED=true. Tanpa modul ini, Dapora tetap berjalan penuh dengan <slug>.dapora.id.
  *
- * Env (Secret): CF_API_TOKEN (izin: SSL and Certificates:Edit pada zona kokofibo.it.com), SUPABASE_SERVICE_ROLE_KEY
- * Env (biasa) : CF_SAAS_ENABLED=true, CF_ZONE_ID, CF_CNAME_TARGET (mis. cname.kokofibo.it.com), CF_MAX_CUSTOM_DOMAINS (default 1)
+ * Env (Secret): CF_API_TOKEN (izin: SSL and Certificates:Edit pada zona dapora.id), SUPABASE_SERVICE_ROLE_KEY
+ * Env (biasa) : CF_SAAS_ENABLED=true, CF_ZONE_ID, CF_CNAME_TARGET (mis. cname.dapora.id), CF_MAX_CUSTOM_DOMAINS (default 1)
  *
  * GET    /api/domains?tenant_id=…            daftar domain + status (menyegarkan status dari Cloudflare)
  * POST   /api/domains {tenant_id, hostname}  daftarkan domain; balasan berisi instruksi DNS

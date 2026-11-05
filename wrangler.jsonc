@@ -7,10 +7,10 @@
   "assets": { "directory": "./dist", "binding": "ASSETS" },
 
   // Wildcard Workers Route — butuh record DNS wildcard BERPROKSI (lihat README-DAPORA.md, langkah C2).
-  "routes": [{ "pattern": "*.kokofibo.it.com/*", "zone_name": "kokofibo.it.com" }],
+  "routes": [{ "pattern": "*.dapora.id/*", "zone_name": "dapora.id" }],
 
   "vars": {
-    "API_URL": "https://admin.kokofibo.it.com"
+    "API_URL": "https://admin.dapora.id"
     // DEFAULT_SITE_SLUG: jangan diisi di produksi
   }
   // Bila build/adapter meminta binding SESSION (error "Invalid binding SESSION"), tambahkan:

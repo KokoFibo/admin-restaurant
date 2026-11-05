@@ -4,9 +4,9 @@
 @@ -3,7 +3,7 @@
  PUBLIC_SUPABASE_ANON_KEY=eyJ...           # anon/publishable key, BUKAN service_role
  PUBLIC_MEDIA_URL=https://images.kokofibo.com   # alamat publik bucket Cloudflare R2
- # Domain dasar website restoran tanpa domain sendiri: https://<slug>.<PUBLIC_BASE_DOMAIN> (nanti ganti ke dapora.com)
+ # Domain dasar website restoran tanpa domain sendiri: https://<slug>.<PUBLIC_BASE_DOMAIN>
 -PUBLIC_BASE_DOMAIN=kokofibo.com
-+PUBLIC_BASE_DOMAIN=kokofibo.it.com
++PUBLIC_BASE_DOMAIN=dapora.id
  
  # ===== Rahasia (hanya Functions; di Cloudflare simpan sebagai Secret, jangan diberi awalan PUBLIC_) =====
  GEMINI_API_KEY=AIza...
@@ -18,7 +18,7 @@
 +# ===== Dapora: pendaftaran mandiri (Functions) =====
 +# Isi NILAI ASLI hanya di Cloudflare Pages (Secret) atau .dev.vars lokal (sudah di-gitignore). File ini hanya contoh dan ikut ter-commit.
 +SIGNUP_ENABLED=true                       # wajib agar /api/signup aktif; bawaan mati
-+SIGNUP_ALLOWED_ORIGINS=https://kokofibo.it.com   # origin website pemasaran yang boleh memanggil /api/signup (CORS); koma untuk beberapa
++SIGNUP_ALLOWED_ORIGINS=https://dapora.id   # origin website pemasaran yang boleh memanggil /api/signup (CORS); koma untuk beberapa
 +SIGNUP_AUTO_CONFIRM=false                 # false = kirim email konfirmasi (butuh SMTP kustom di Supabase); true = langsung aktif (hanya uji)
 +# SIGNUP_PLAN=basic
 +# TURNSTILE_SECRET=...                    # Secret; sangat disarankan di produksi (pasangannya VITE_TURNSTILE_SITEKEY di website)
@@ -27,7 +27,7 @@
 +# ===== Dapora: domain kustom (OPSIONAL; Cloudflare for SaaS, custom hostname persis) =====
 +# CF_SAAS_ENABLED=true
 +# CF_ZONE_ID=...                          # zona domain dasar
-+# CF_CNAME_TARGET=cname.kokofibo.it.com
++# CF_CNAME_TARGET=cname.dapora.id
 +# CF_MAX_CUSTOM_DOMAINS=1
 +# CF_API_TOKEN=...                        # Secret. Izin minimal: SSL and Certificates: Edit (zona domain dasar)
 
@@ -49,10 +49,10 @@
 @@ -0,0 +1,96 @@
 +/**
 + * MODUL OPSIONAL — domain kustom pelanggan lewat Cloudflare for SaaS (custom hostname PERSIS, bukan wildcard).
-+ * Nonaktif kecuali CF_SAAS_ENABLED=true. Tanpa modul ini, Dapora tetap berjalan penuh dengan <slug>.kokofibo.it.com.
++ * Nonaktif kecuali CF_SAAS_ENABLED=true. Tanpa modul ini, Dapora tetap berjalan penuh dengan <slug>.dapora.id.
 + *
-+ * Env (Secret): CF_API_TOKEN (izin: SSL and Certificates:Edit pada zona kokofibo.it.com), SUPABASE_SERVICE_ROLE_KEY
-+ * Env (biasa) : CF_SAAS_ENABLED=true, CF_ZONE_ID, CF_CNAME_TARGET (mis. cname.kokofibo.it.com), CF_MAX_CUSTOM_DOMAINS (default 1)
++ * Env (Secret): CF_API_TOKEN (izin: SSL and Certificates:Edit pada zona dapora.id), SUPABASE_SERVICE_ROLE_KEY
++ * Env (biasa) : CF_SAAS_ENABLED=true, CF_ZONE_ID, CF_CNAME_TARGET (mis. cname.dapora.id), CF_MAX_CUSTOM_DOMAINS (default 1)
 + *
 + * GET    /api/domains?tenant_id=…            daftar domain + status (menyegarkan status dari Cloudflare)
 + * POST   /api/domains {tenant_id, hostname}  daftarkan domain; balasan berisi instruksi DNS
@@ -502,7 +502,7 @@
 +-- ---------- pengaturan platform ----------
 +create table if not exists public.platform_settings (key text primary key, value text not null);
 +alter table public.platform_settings enable row level security;   -- tanpa policy: hanya fungsi security definer / service_role
-+insert into public.platform_settings (key, value) values ('base_domain', 'kokofibo.it.com') on conflict (key) do nothing;
++insert into public.platform_settings (key, value) values ('base_domain', 'dapora.id') on conflict (key) do nothing;
 +
 +-- ---------- template ----------
 +create table if not exists public.templates (
@@ -628,9 +628,9 @@
 +revoke all on function public.create_tenant(uuid, text, text, text, text, text, text) from public, anon, authenticated;
 +grant execute on function public.create_tenant(uuid, text, text, text, text, text, text) to service_role;
 +
-+-- ---------- pindah domain dasar (mis. kokofibo.it.com → dapora.com) ----------
++-- ---------- pindah domain dasar (mis. dapora.id → domain lain) ----------
 +-- Jalankan HANYA setelah wildcard DNS + Worker route untuk domain baru aktif. Domain kustom pelanggan tidak berubah.
-+-- Pemakaian:  select public.rebase_subdomains('dapora.com');
++-- Pemakaian:  select public.rebase_subdomains('dapora.id');
 +create or replace function public.rebase_subdomains(p_new_base text) returns int language plpgsql security definer set search_path = public as $$
 +declare v_n int;
 +begin
