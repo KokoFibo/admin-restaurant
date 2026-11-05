@@ -76,3 +76,5 @@ Tab **Restoran** → panel **Hapus data tenant** (hanya tampil untuk Super Admin
 3. Ketik **slug restoran** (satu tenant) atau **HAPUS SEMUA** (semua tenant) untuk mengaktifkan tombol hapus. Teks ini dicek ulang di server.
 
 Pasang: jalankan `supabase/08-hapus-tenant.sql` di SQL Editor (aman diulang). Fungsi `purge_preview` / `purge_tenants` hanya bisa dipanggil `service_role`; `/api/purge` memastikan pemanggil Super Admin (`is_platform_admin`) sebelum memanggilnya. Penghapusan database berjalan dalam **satu transaksi** (gagal = tidak ada yang berubah). Foto R2 dihapus per halaman setelahnya dan hanya di jalur `restaurant/tenants/…` dan `tenants/<uuid>/…`; bila terhenti, tombol **Ulangi hapus foto** tersedia. Butuh `R2_*` dan `SUPABASE_SERVICE_ROLE_KEY` (sudah ada).
+
+<!-- ok -->
