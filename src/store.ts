@@ -12,6 +12,16 @@ export const S = reactive<any>({
   view: 'boot' as 'boot' | 'login' | 'panel' | 'recover', uid: '', email: '', isMaster: false, tenants: [], tid: '', myRoles: {}, tab: 'menu', noTenant: false,
   langsAll: [], T: null, TL: ['id'], cats: [], items: [], catTr: [], itTr: [], tenTr: [], members: [], tables: [], domains: [],
 });
+/** Penanda "minta bill" dari pelanggan (tanpa nominal) — dibaca kasir/manager/owner dan Service. */
+export const billReqs = ref<any[]>([]); let billReqInit = false;
+export async function loadBillReqs() {
+  const tid = S.tid; if (!tid || !(can.pay() || role() === 'service')) { billReqs.value = []; billReqInit = false; return; }
+  const { data, error } = await sb.rpc('list_bill_requests', { p_tenant: tid }); if (error || tid !== S.tid) return;
+  const old = new Set(billReqs.value.map((x: any) => x.bill_id)), fresh = (data || []).filter((x: any) => !old.has(x.bill_id));
+  billReqs.value = data || [];
+  if (billReqInit && fresh.length) toast(t('Minta bill: {0}', fresh.map((x: any) => x.label).join(', ')));
+  billReqInit = true;
+}
 export const toastMsg = ref(''); let toastTimer: any;
 export const toast = (m: string) => { toastMsg.value = m; clearTimeout(toastTimer); toastTimer = setTimeout(() => (toastMsg.value = ''), 4200); };
 /** Daftar meja yang QR-nya sedang ditampilkan (null = tertutup). */
@@ -27,12 +37,14 @@ export const can = {
   site: () => ['super_admin', 'owner'].includes(role()),
   banner: () => ['super_admin', 'owner', 'manager'].includes(role()),
   pay: () => ['super_admin', 'owner', 'manager', 'cashier'].includes(role()),
+  void: () => ['super_admin', 'owner', 'manager'].includes(role()),   // tutup paksa tagihan / batalkan pembayaran
+  price: () => role() !== 'kitchen',                                  // dapur tidak perlu melihat harga
 };
 export const lim = (c: string) => S.langsAll.find((l: any) => l.code === c) || { code: c, name_native: c, max_name: 60, max_short: 160, max_detail: 700 };
 export const itText = (id: string, l: string): any => S.itTr.find((r: any) => r.menu_item_id === id && r.lang === l) || {};
 export const catName = (id: string, l = S.TL[0]) => S.catTr.find((r: any) => r.category_id === id && r.lang === l)?.name || t('(tanpa nama)');
 export const enabled = (o: string) => (S.T?.menu_options || []).includes(o);
-const defaultTab = () => (['kitchen', 'service', 'cashier'].includes(role()) ? 'orders' : 'menu');
+const defaultTab = () => (role() === 'cashier' ? 'bills' : ['kitchen', 'service'].includes(role()) ? 'orders' : 'menu');
 
 /** Alamat website publik restoran (untuk "Lihat website" dan QR meja): domain sendiri dari tenant_domains, kalau tidak ada <slug>.<domain-dasar>. Bukan alamat admin. */
 const BASE_DOMAIN = (import.meta.env.PUBLIC_BASE_DOMAIN || '').replace(/^\./, '');

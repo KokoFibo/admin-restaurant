@@ -7,7 +7,7 @@ import { S, TYPES, TYPE_DEFAULTS, optionMeta, enabled, lim, load, toast } from '
 import Field from './Field.vue';
 import PurgePanel from './PurgePanel.vue';
 const p = reactive<any>({ phone: '', wa: '', email: '', maps: '', address: '', lunch: '', tea: '', dinner: '', tr: {} }), mst = reactive<any>({ type: 'vegan', alang: 'id', l1: 'id', l2: '', tz: 'Asia/Jakarta', opts: {} });
-const pMsg = ref(''), mMsg = ref('');
+const pMsg = ref(''), mMsg = ref(''), bill = reactive<any>({ tax: 0, service: 0 }), bMsg = ref('');
 function init() {
   const T = S.T, hr = T.opening_hours || {};
   Object.assign(p, { phone: T.phone || '', wa: T.whatsapp || '', email: T.email || '', maps: T.maps_url || '', address: T.address || '', lunch: hr.lunch || '', tea: hr.tea || '', dinner: hr.dinner || '' });
@@ -16,6 +16,13 @@ function init() {
   mst.opts = Object.fromEntries(optionMeta().map(o => [o[0], enabled(o[0])]));
 }
 watch(() => [S.T, S.tenTr], init, { immediate: true });
+watch(() => S.T, T => { bill.tax = Number(T?.tax_pct ?? 0); bill.service = Number(T?.service_pct ?? 0); }, { immediate: true });
+async function saveBilling() {
+  const tax = Number(bill.tax), svc = Number(bill.service);
+  if (!(tax >= 0 && tax <= 100 && svc >= 0 && svc <= 100)) return (bMsg.value = t('Persentase harus antara 0 dan 100.'));
+  bMsg.value = t('Menyimpan…'); const { error } = await sb.rpc('set_tenant_billing', { p_tenant: S.tid, p_tax: tax, p_service: svc });
+  if (error) return (bMsg.value = error.message); bMsg.value = ''; toast(t('Tersimpan')); load();
+}
 const langs = () => S.langsAll.filter((l: any) => l.is_available);
 async function saveProfile() {
   pMsg.value = t('Menyimpan…'); const hours: any = {}; (['lunch', 'tea', 'dinner'] as const).forEach(k => { const v = p[k].trim(); if (v) hours[k] = v; });
@@ -51,6 +58,10 @@ async function saveMaster() {
         <Field v-model="p.tr[c].brand" :label="t('Nama brand')" :max="80" /><Field v-model="p.tr[c].tagline" :label="t('Slogan')" :max="160" /></fieldset>
       <div v-if="S.TL.length > 1" class="row"><button type="button" class="btn ghost" @click="trTagline">{{ t('Terjemahkan slogan') }}</button></div>
       <p class="err">{{ pMsg }}</p><div class="row"><button class="btn vm" type="submit">{{ t('Simpan profil') }}</button></div></form>
+    <form class="panel" @submit.prevent="saveBilling"><h3>{{ t('Pembayaran: pajak & biaya layanan') }}</h3>
+      <div class="grid2"><label>{{ t('Biaya layanan (%)') }}<input v-model="bill.service" type="number" min="0" max="100" step="0.01" /></label><label>{{ t('Pajak (%)') }}<input v-model="bill.tax" type="number" min="0" max="100" step="0.01" /></label></div>
+      <p class="hint">{{ t('Dihitung di tagihan: (subtotal − diskon) + biaya layanan, lalu pajak atas jumlah itu. Isi 0 bila tidak dipakai. Harga menu dianggap belum termasuk keduanya. Tagihan yang sudah lunas tidak berubah.') }}</p>
+      <p class="err">{{ bMsg }}</p><div class="row"><button class="btn vm" type="submit">{{ t('Simpan pembayaran') }}</button></div></form>
     <form v-if="S.isMaster" class="panel" @submit.prevent="saveMaster"><h3>{{ t('Pengaturan master') }} <small class="muted">{{ t('(hanya Super Admin)') }}</small></h3>
       <div class="grid2">
         <label>{{ t('Tipe restoran') }}<select v-model="mst.type" @change="onType"><option v-for="(v, k) in TYPES" :key="k" :value="k">{{ v }}</option></select></label>

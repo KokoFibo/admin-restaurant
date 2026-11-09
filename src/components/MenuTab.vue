@@ -31,7 +31,7 @@ async function del(i: any) {   // hapus permanen: baris menu dulu, lalu fotonya 
         <div v-for="i in inCat(c.id)" :key="i.id" class="arow" :class="{ dim: !i.is_visible }">
           <span v-if="can.edit()" class="drag" :title="t('Geser untuk mengurutkan')">⠿</span><span v-else />
           <img v-if="i.image_key" class="th" :src="media(i.image_key)" alt="" loading="lazy" /><div v-else class="th">{{ (name(i) || '?')[0] }}</div>
-          <div><b>{{ name(i) }}</b><span class="muted">{{ rp(i.price_idr) }}{{ flags(i) ? ' · ' + flags(i) : '' }}</span></div>
+          <div><b>{{ name(i) }}</b><span class="muted">{{ can.price() ? rp(i.price_idr) : '' }}{{ flags(i) ? (can.price() ? ' · ' : '') + flags(i) : '' }}</span></div>
           <div class="acts">
             <button v-if="can.edit()" class="star" :class="{ on: i.is_featured }" :title="t('Hidangan unggulan di Beranda (maks 6)')" @click="feature(i)">{{ i.is_featured ? '★' : '☆' }}</button>
             <button v-if="can.sold()" @click="run(sb.rpc('set_sold_out', { p_item: i.id, p_value: !i.is_sold_out }))">{{ i.is_sold_out ? t('Tersedia') : t('Habis') }}</button>

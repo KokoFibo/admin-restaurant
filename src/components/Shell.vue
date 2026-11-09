@@ -1,13 +1,16 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { t, applyLang, lang } from '../lib/i18n';
-import { S, ROLE_LABEL, role, can, logout, selectTenant, setTab, siteBase, toast, load } from '../store';
+import { S, ROLE_LABEL, role, can, logout, selectTenant, setTab, siteBase, toast, load, billReqs, loadBillReqs } from '../store';
 import { sb } from '../lib/supabase';
-import OrdersTab from './OrdersTab.vue'; import MenuTab from './MenuTab.vue'; import CategoriesTab from './CategoriesTab.vue';
+import OrdersTab from './OrdersTab.vue'; import BillsTab from './BillsTab.vue'; import MenuTab from './MenuTab.vue'; import CategoriesTab from './CategoriesTab.vue';
 import SiteTab from './SiteTab.vue'; import BannersTab from './BannersTab.vue'; import TablesTab from './TablesTab.vue'; import RestaurantTab from './RestaurantTab.vue'; import AccountsTab from './AccountsTab.vue'; import PasswordDialog from './PasswordDialog.vue';
 const pw = ref<any>();
-const tabs = computed<[string, string][]>(() => ([['orders', t('Pesanan'), true], ['menu', t('Menu'), true], ['cats', t('Kategori'), can.edit()], ['tables', t('Meja'), can.edit()], ['resto', t('Restoran'), can.resto()], ['site', t('Tampilan Website'), can.site()], ['banner', t('Banner'), can.banner()], ['akun', t('Akun'), can.accounts()]] as [string, string, boolean][]).filter(x => x[2]).map(x => [x[0], x[1]]));
-const view = { orders: OrdersTab, menu: MenuTab, cats: CategoriesTab, tables: TablesTab, resto: RestaurantTab, site: SiteTab, banner: BannersTab, akun: AccountsTab } as any;
+let reqTimer: any;
+watch(() => S.tid, () => { billReqs.value = []; loadBillReqs(); }, { immediate: true });
+onMounted(() => { reqTimer = setInterval(() => document.visibilityState === 'visible' && loadBillReqs(), 6000); }); onUnmounted(() => clearInterval(reqTimer));
+const tabs = computed<[string, string][]>(() => ([['orders', t('Pesanan'), true], ['bills', t('Tagihan') + (billReqs.value.length ? ` 🔔${billReqs.value.length}` : ''), can.pay()], ['menu', t('Menu'), true], ['cats', t('Kategori'), can.edit()], ['tables', t('Meja'), can.edit()], ['resto', t('Restoran'), can.resto()], ['site', t('Tampilan Website'), can.site()], ['banner', t('Banner'), can.banner()], ['akun', t('Akun'), can.accounts()]] as [string, string, boolean][]).filter(x => x[2]).map(x => [x[0], x[1]]));
+const view = { orders: OrdersTab, bills: BillsTab, menu: MenuTab, cats: CategoriesTab, tables: TablesTab, resto: RestaurantTab, site: SiteTab, banner: BannersTab, akun: AccountsTab } as any;
 const name = computed(() => (S.tenTr.find((x: any) => x.lang === S.TL[0])?.brand_name || S.T?.slug || ''));
 const site = computed(siteBase);
 const paused = computed(() => !!S.T?.orders_paused);

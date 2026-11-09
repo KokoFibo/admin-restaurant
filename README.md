@@ -78,3 +78,13 @@ Tab **Restoran** → panel **Hapus data tenant** (hanya tampil untuk Super Admin
 Pasang: jalankan `supabase/08-hapus-tenant.sql` di SQL Editor (aman diulang). Fungsi `purge_preview` / `purge_tenants` hanya bisa dipanggil `service_role`; `/api/purge` memastikan pemanggil Super Admin (`is_platform_admin`) sebelum memanggilnya. Penghapusan database berjalan dalam **satu transaksi** (gagal = tidak ada yang berubah). Foto R2 dihapus per halaman setelahnya dan hanya di jalur `restaurant/tenants/…` dan `tenants/<uuid>/…`; bila terhenti, tombol **Ulangi hapus foto** tersedia. Butuh `R2_*` dan `SUPABASE_SERVICE_ROLE_KEY` (sudah ada).
 
 <!-- ok -->
+
+## Tagihan meja (gabung meja, pembayaran campuran, pajak/service/diskon)
+
+Pasang: jalankan `supabase/09-tagihan.sql` di SQL Editor **setelah 01–06 dan 08** (aman diulang). Pesanan lama dipindahkan otomatis ke tagihan (yang belum dibayar per meja menjadi tagihan terbuka; sisanya tagihan tertutup).
+
+- **Pelanggan**: pesanan tetap per pelanggan; pesanan susulan dari meja yang sama otomatis masuk tagihan yang sama. Batas: maks 15 pelanggan (perangkat) per meja, 1 pesanan / 10 detik per perangkat. Tombol **Minta bill** memanggil `POST /v1/bill-request`.
+- **Kasir / Manager / Owner** — tab **Tagihan**: gabungkan 2+ meja, pisahkan pesanan, diskon manual, bayar sekali dengan beberapa metode (jumlah harus pas, tidak dicicil; tunai menghitung kembalian). **Batalkan pembayaran** dan **Tutup paksa** hanya Manager/Owner.
+- **Owner** — tab Restoran → *Pembayaran*: persen biaya layanan dan pajak. Urutan: (subtotal − diskon) + biaya layanan, lalu pajak; disalin ke tagihan saat lunas.
+- **Kitchen / Service**: tidak melihat harga/status bayar; Service hanya melihat penanda "Minta bill" (tanpa nominal). Catatan: pembatasan ini ada di tampilan; kolom `orders.total_idr` tetap bisa dibaca anggota restoran lewat API Supabase (RLS tingkat baris, bukan kolom).
+- Fungsi `set_order_payment` lama dinonaktifkan (pembayaran hanya lewat `pay_bill`). Pesanan pada tagihan lunas tidak bisa dibatalkan sebelum pembayarannya dibatalkan.

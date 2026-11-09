@@ -55,8 +55,11 @@ begin
   end if;
 
   -- dari yang paling "ujung" ke atas (orders/order_items berstatus RESTRICT, jadi harus lebih dulu)
+  delete from public.payments                 where tenant_id = any (v_ids);
   delete from public.order_items              where tenant_id = any (v_ids);
   delete from public.orders                   where tenant_id = any (v_ids);
+  delete from public.bill_tables              where tenant_id = any (v_ids);   -- sebelum meja ikut terhapus (pemicu penjaga meja)
+  delete from public.bills                    where tenant_id = any (v_ids);
   delete from public.category_translations    where tenant_id = any (v_ids);
   delete from public.menu_item_translations   where tenant_id = any (v_ids);
   delete from public.site_text_translations   where tenant_id = any (v_ids);

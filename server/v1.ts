@@ -128,7 +128,7 @@ export async function loadMenu(e: any, sb: ReturnType<typeof db>, site: string) 
 }
 
 /* ---------------- Pesanan ---------------- */
-const ORDER_STATUS: Record<string, number> = { 'E:invalid_table': 403, 'E:empty': 400, 'E:rate_limited': 429, 'E:too_many_active': 429, 'E:item_unavailable': 409, 'E:closed': 409 };
+const ORDER_STATUS: Record<string, number> = { 'E:invalid_table': 403, 'E:empty': 400, 'E:rate_limited': 429, 'E:too_many_active': 429, 'E:table_full': 409, 'E:no_bill': 409, 'E:item_unavailable': 409, 'E:closed': 409 };
 export function orderError(message: unknown): [string, number] {
   const code = /E:[a-z_]+/.exec(String(message ?? ''))?.[0];
   return code && ORDER_STATUS[code] ? [code, ORDER_STATUS[code]] : ['E:unavailable', 503];
