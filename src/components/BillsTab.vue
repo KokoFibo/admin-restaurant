@@ -54,9 +54,12 @@ async function poll() { if (busy || document.visibilityState !== 'visible') retu
 onMounted(() => { load(); timer = setInterval(poll, 5000); }); onUnmounted(() => clearInterval(timer));
 function setScope(s: 'open' | 'closed') { scope.value = s; bills.value = []; loaded.value = false; load(); }
 
-async function act(b: any, p: Promise<any>, ok = '') {
+/** Setelah gabung/pisah/urungkan, isian pembayaran lama tidak berlaku lagi (total berubah). */
+const resetState = () => { for (const o of [pay, discTouched, sel] as any[]) Object.keys(o).forEach(k => delete o[k]); };
+async function act(b: any, p: Promise<any>, ok = '', reset = false) {
   busyBill.value = b?.id || 'x'; const { data, error } = await p; busyBill.value = '';
   if (error) { toast(error.message); return null; }
+  if (reset) resetState();
   if (ok) toast(ok); await load(); loadBillReqs(); return data ?? true;
 }
 const touch = (b: any) => { pay[b.id].touched = true; };
@@ -73,8 +76,9 @@ async function applyDisc(b: any) { const v = num(disc[b.id]); discTouched[b.id] 
 async function doSplit(b: any) {
   const ids = selected(b); if (!ids.length) return;
   if (!confirm(t('Pisahkan {0} pesanan ke tagihan baru? Tagihan baru dibayar sendiri.', ids.length))) return;
-  ids.forEach((id: string) => delete sel[id]); await act(b, sb.rpc('split_orders', { p_orders: ids }), t('Pesanan dipisahkan'));
+  ids.forEach((id: string) => delete sel[id]); await act(b, sb.rpc('split_orders', { p_orders: ids }), t('Pesanan dipisahkan'), true);
 }
+async function doUndo(b: any) { if (!b.undo || !confirm(t('Urungkan: {0}?', b.undo.summary))) return; await act(b, sb.rpc('undo_last', { p_bill: b.id }), t('Tindakan diurungkan'), true); }
 async function doVoid(b: any) { const r = prompt(t('Tutup paksa tagihan {0} tanpa pembayaran? Tulis alasan (opsional):', title(b))); if (r === null) return; await act(b, sb.rpc('void_bill', { p_bill: b.id, p_reason: r }), t('Tagihan ditutup')); }
 async function doReopen(b: any) { const r = prompt(t('Batalkan pembayaran tagihan {0}? Tulis alasan (opsional):', title(b))); if (r === null) return; await act(b, sb.rpc('reopen_bill', { p_bill: b.id, p_reason: r }), t('Pembayaran dibatalkan, tagihan dibuka lagi')); }
 
@@ -83,6 +87,21 @@ const mdlg = ref<any>(), pick = reactive<Record<string, boolean>>({});
 const tableBill = computed(() => { const m: Record<string, any> = {}; for (const b of scope.value === 'open' ? bills.value : []) for (const x of b.tables || []) if (x.id) m[x.id] = b; return m; });
 const mergeable = computed(() => S.tables.filter((x: any) => x.is_active));
 const nPick = computed(() => Object.keys(pick).filter(k => pick[k]).length);
+/** Ringkasan sebelum gabung: tiap meja → tagihan & subtotalnya, plus subtotal gabungan. */
+const preview = computed(() => {
+  const rows = Object.keys(pick).filter(k => pick[k]).map(id => ({ id, label: S.tables.find((x: any) => x.id === id)?.label, bill: tableBill.value[id] }));
+  const uniq = [...new Map(rows.filter(r => r.bill).map(r => [r.bill.id, r.bill])).values()] as any[];
+  return { rows, sub: uniq.reduce((a, x) => a + Number(x.figures?.subtotal || 0), 0) };
+});
+/* ---- gabung tagihan (mis. tagihan hasil pisahan kembali ke tagihan meja) ---- */
+const bdlg = ref<any>(), mbSrc = ref<any>(null), mbTarget = ref('');
+const mbOptions = computed(() => bills.value.filter((x: any) => x.status === 'open' && x.id !== mbSrc.value?.id));
+const otherOpen = (b: any) => bills.value.some((x: any) => x.status === 'open' && x.id !== b.id);
+function openMergeBill(b: any) { mbSrc.value = b; mbTarget.value = ''; bdlg.value?.open(); }
+async function doMergeBill() {
+  if (!mbSrc.value || !mbTarget.value) return;
+  const r = await act(mbSrc.value, sb.rpc('merge_bills', { p_target: mbTarget.value, p_sources: [mbSrc.value.id] }), t('Tagihan digabung'), true); if (r) bdlg.value?.close();
+}
 async function openMerge() {
   if (scope.value !== 'open') setScope('open');
   const { data } = await sb.from('restaurant_tables').select('*').eq('tenant_id', S.tid); if (data) S.tables = data.sort((a: any, b: any) => a.sort - b.sort || (a.created_at || '').localeCompare(b.created_at || ''));
@@ -90,7 +109,7 @@ async function openMerge() {
 }
 async function doMerge() {
   const ids = Object.keys(pick).filter(k => pick[k]); if (ids.length < 2) return;
-  const r = await act(null, sb.rpc('merge_tables', { p_tenant: S.tid, p_tables: ids }), t('Meja digabung')); if (r) mdlg.value?.close();
+  const r = await act(null, sb.rpc('merge_tables', { p_tenant: S.tid, p_tables: ids }), t('Meja digabung'), true); if (r) mdlg.value?.close();
 }
 </script>
 <template>
@@ -115,6 +134,7 @@ async function doMerge() {
             <span class="muted">{{ rp(o.total_idr) }}</span>
           </div>
         </div>
+        <div v-if="b.status === 'open' && b.undo" class="row"><button class="btn ghost" @click="doUndo(b)">↶ {{ t('Urungkan: {0}', b.undo.summary) }}</button></div>
         <div v-if="b.status === 'open' && selected(b).length" class="row"><button class="btn ghost" @click="doSplit(b)">{{ t('Pisahkan {0} pesanan terpilih', selected(b).length) }}</button></div>
 
         <div class="bfig">
@@ -140,6 +160,7 @@ async function doMerge() {
           <div class="row" style="gap:.4rem;flex-wrap:wrap">
             <button class="btn vm" :disabled="!canPay(b)" @click="doPay(b)">{{ t('Bayar {0}', rp(total(b))) }}</button>
             <button class="btn ghost" type="button" @click="addRow(b)">{{ t('+ Metode lain') }}</button>
+            <button v-if="otherOpen(b)" class="btn ghost" type="button" @click="openMergeBill(b)">{{ t('Gabungkan ke tagihan lain') }}</button>
             <button v-if="can.void()" class="btn ghost danger" type="button" @click="doVoid(b)">{{ t('Tutup paksa') }}</button></div>
         </template>
 
@@ -147,6 +168,8 @@ async function doMerge() {
           <ul class="paylist"><li v-for="(p, i) in b.payments" :key="i">{{ METHODS()[p.method] }} · {{ rp(p.amount_idr) }}<template v-if="p.tendered_idr && p.tendered_idr > p.amount_idr"> ({{ t('diterima {0}', rp(p.tendered_idr)) }})</template></li></ul>
           <div v-if="can.void()" class="row"><button class="btn ghost danger" @click="doReopen(b)">{{ t('Batalkan pembayaran') }}</button></div>
         </template>
+        <details v-if="b.events?.length" class="bhist"><summary>{{ t('Riwayat tindakan') }} ({{ b.events.length }})</summary>
+          <ul><li v-for="e in b.events" :key="e.id" :class="{ off: e.undone }">{{ hm(e.at) }} · {{ e.by || '—' }} · {{ e.summary }}<template v-if="e.undone"> ({{ t('diurungkan') }})</template></li></ul></details>
       </div>
       <p v-if="loaded && !bills.length" class="muted">{{ scope === 'open' ? t('Tidak ada tagihan terbuka.') : t('Belum ada tagihan yang ditutup hari ini.') }}</p>
     </div>
@@ -155,7 +178,17 @@ async function doMerge() {
       <h3>{{ t('Gabungkan meja') }}</h3><p class="hint">{{ t('Pilih 2 meja atau lebih. Tagihannya dilebur jadi satu; pesanan baru dari meja mana pun ikut masuk ke tagihan ini.') }}</p>
       <div class="mpick"><label v-for="tb in mergeable" :key="tb.id"><input v-model="pick[tb.id]" type="checkbox" /> <b>{{ tb.label }}</b>
         <span class="muted">{{ tableBill[tb.id] ? t('tagihan {0}', title(tableBill[tb.id])) : t('kosong') }}</span></label></div>
+      <div v-if="nPick >= 2" class="mprev"><b>{{ t('Ringkasan') }}</b>
+        <div v-for="r in preview.rows" :key="r.id">{{ r.label }} → {{ r.bill ? `${title(r.bill)} · ${rp(r.bill.figures.subtotal)}` : t('kosong') }}</div>
+        <div>{{ t('Hasil: satu tagihan, subtotal {0}', rp(preview.sub)) }}</div></div>
       <div class="row" style="gap:.5rem;margin-top:1rem"><button type="submit" class="btn vm" :disabled="nPick < 2">{{ t('Gabungkan {0} meja', nPick) }}</button><button type="button" class="btn ghost" @click="mdlg.close()">{{ t('Batal') }}</button></div>
+    </form></Modal>
+
+    <Modal ref="bdlg"><form method="dialog" class="dlg" @submit.prevent="doMergeBill">
+      <h3>{{ t('Gabungkan ke tagihan lain') }}</h3>
+      <p class="hint">{{ mbSrc ? t('Semua pesanan {0} ({1}) dipindahkan ke tagihan yang Anda pilih. Bisa diurungkan sebelum dibayar.', title(mbSrc), where(mbSrc)) : '' }}</p>
+      <div class="mpick"><label v-for="x in mbOptions" :key="x.id"><input v-model="mbTarget" type="radio" :value="x.id" /> <b>{{ title(x) }}</b> {{ where(x) }} <span class="muted">{{ rp(x.figures.subtotal) }}</span></label></div>
+      <div class="row" style="gap:.5rem;margin-top:1rem"><button type="submit" class="btn vm" :disabled="!mbTarget">{{ t('Gabungkan') }}</button><button type="button" class="btn ghost" @click="bdlg.close()">{{ t('Batal') }}</button></div>
     </form></Modal>
   </div>
 </template>
