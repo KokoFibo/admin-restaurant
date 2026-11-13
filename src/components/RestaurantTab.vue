@@ -7,7 +7,7 @@ import { S, TYPES, TYPE_DEFAULTS, optionMeta, enabled, lim, load, toast } from '
 import Field from './Field.vue';
 import PurgePanel from './PurgePanel.vue';
 const p = reactive<any>({ phone: '', wa: '', email: '', maps: '', address: '', lunch: '', tea: '', dinner: '', tr: {} }), mst = reactive<any>({ type: 'vegan', alang: 'id', l1: 'id', l2: '', tz: 'Asia/Jakarta', opts: {} });
-const pMsg = ref(''), mMsg = ref(''), bill = reactive<any>({ tax: 0, service: 0 }), bMsg = ref('');
+const pMsg = ref(''), mMsg = ref(''), bill = reactive<any>({ tax: 0, service: 0 }), bMsg = ref(''), mode = ref('photo'), dMsg = ref('');
 function init() {
   const T = S.T, hr = T.opening_hours || {};
   Object.assign(p, { phone: T.phone || '', wa: T.whatsapp || '', email: T.email || '', maps: T.maps_url || '', address: T.address || '', lunch: hr.lunch || '', tea: hr.tea || '', dinner: hr.dinner || '' });
@@ -17,6 +17,11 @@ function init() {
 }
 watch(() => [S.T, S.tenTr], init, { immediate: true });
 watch(() => S.T, T => { bill.tax = Number(T?.tax_pct ?? 0); bill.service = Number(T?.service_pct ?? 0); }, { immediate: true });
+watch(() => S.T, T => { mode.value = T?.menu_display === 'text' ? 'text' : 'photo'; }, { immediate: true });
+async function saveDisplay() {
+  dMsg.value = t('Menyimpan…'); const { error } = await sb.rpc('set_menu_display', { p_tenant: S.tid, p_mode: mode.value });
+  if (error) return (dMsg.value = error.message); dMsg.value = ''; toast(t('Tersimpan')); load();
+}
 async function saveBilling() {
   const tax = Number(bill.tax), svc = Number(bill.service);
   if (!(tax >= 0 && tax <= 100 && svc >= 0 && svc <= 100)) return (bMsg.value = t('Persentase harus antara 0 dan 100.'));
@@ -58,6 +63,11 @@ async function saveMaster() {
         <Field v-model="p.tr[c].brand" :label="t('Nama brand')" :max="80" /><Field v-model="p.tr[c].tagline" :label="t('Slogan')" :max="160" /></fieldset>
       <div v-if="S.TL.length > 1" class="row"><button type="button" class="btn ghost" @click="trTagline">{{ t('Terjemahkan slogan') }}</button></div>
       <p class="err">{{ pMsg }}</p><div class="row"><button class="btn vm" type="submit">{{ t('Simpan profil') }}</button></div></form>
+    <form class="panel" @submit.prevent="saveDisplay"><h3>{{ t('Tampilan menu') }}</h3>
+      <label class="chk"><input v-model="mode" type="radio" value="photo" /> {{ t('Dengan foto (kartu)') }}</label>
+      <label class="chk"><input v-model="mode" type="radio" value="text" /> {{ t('Teks saja (daftar ringkas: nama, deskripsi, harga)') }}</label>
+      <p class="hint">{{ t('Foto yang sudah diunggah tidak dihapus saat Anda berpindah mode, dan bisa dipakai lagi kapan saja. Foto hero dan banner tidak terpengaruh.') }}</p>
+      <p class="err">{{ dMsg }}</p><div class="row"><button class="btn vm" type="submit">{{ t('Simpan tampilan menu') }}</button></div></form>
     <form class="panel" @submit.prevent="saveBilling"><h3>{{ t('Pembayaran: pajak & biaya layanan') }}</h3>
       <div class="grid2"><label>{{ t('Biaya layanan (%)') }}<input v-model="bill.service" type="number" min="0" max="100" step="0.01" /></label><label>{{ t('Pajak (%)') }}<input v-model="bill.tax" type="number" min="0" max="100" step="0.01" /></label></div>
       <p class="hint">{{ t('Dihitung di tagihan: (subtotal − diskon) + biaya layanan, lalu pajak atas jumlah itu. Isi 0 bila tidak dipakai. Harga menu dianggap belum termasuk keduanya. Tagihan yang sudah lunas tidak berubah.') }}</p>

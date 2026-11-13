@@ -18,7 +18,7 @@ begin
              'resolve_tenant','tenant_public_json','consume_ai','touch_updated_at','check_lang_available','enforce_translation_limits',
              'normalize_menu_options','renormalize_items','master_set_tenant_settings','save_menu_item','save_category',
              'tenant_role','has_role','can_edit_menu','can_reset_password','list_tenant_members','master_link_member','master_remove_member','set_sold_out',
-             'can_create_role','resolve_table','place_order','set_order_status','set_order_payment','_next_bill_no','_log_event','_merge_into','lock_bill_events','merge_bills','undo_last','_bill_figures','_open_bill','guard_table_delete','request_bill','list_bills','list_bill_requests','merge_tables','split_orders','set_bill_discount','pay_bill','void_bill','reopen_bill','set_tenant_billing','rotate_table_token','reorder_categories','reorder_menu_items','prevent_slug_change')
+             'can_create_role','resolve_table','place_order','set_order_status','set_order_payment','set_menu_display','_next_bill_no','_log_event','_merge_into','lock_bill_events','merge_bills','undo_last','_bill_figures','_open_bill','guard_table_delete','request_bill','list_bills','list_bill_requests','merge_tables','split_orders','set_bill_discount','pay_bill','void_bill','reopen_bill','set_tenant_billing','rotate_table_token','reorder_categories','reorder_menu_items','prevent_slug_change')
   loop execute 'drop function ' || r.sig || ' cascade'; end loop;
 end $$;
 

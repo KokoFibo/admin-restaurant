@@ -419,4 +419,9 @@ export const EN: Record<string, string> = {
  "Gabungkan": "Merge",
  "Tagihan digabung": "Bills merged",
  "Semua pesanan {0} ({1}) dipindahkan ke tagihan yang Anda pilih. Bisa diurungkan sebelum dibayar.": "All orders of {0} ({1}) are moved into the bill you choose. Can be undone before payment.",
+ "Tampilan menu": "Menu display",
+ "Dengan foto (kartu)": "With photos (cards)",
+ "Teks saja (daftar ringkas: nama, deskripsi, harga)": "Text only (compact list: name, description, price)",
+ "Foto yang sudah diunggah tidak dihapus saat Anda berpindah mode, dan bisa dipakai lagi kapan saja. Foto hero dan banner tidak terpengaruh.": "Uploaded photos are not deleted when you switch modes and can be used again any time. Hero and banner photos are not affected.",
+ "Simpan tampilan menu": "Save menu display",
 };

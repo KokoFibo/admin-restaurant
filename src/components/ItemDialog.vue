@@ -94,7 +94,7 @@ async function submit() {
       <Field v-model="f.tr[code].badge" :label="t('Label (opsional, mis. &quot;Pilihan Chef&quot;)')" :max="40" />
       <div v-if="idx > 0" class="checks"><label><input v-model="f.lock" type="checkbox" /> {{ t('Kunci terjemahan (tidak ditimpa otomatis)') }}</label><button type="button" class="btn ghost" @click="retranslate">{{ t('Terjemahkan ulang') }}</button></div>
     </fieldset>
-    <fieldset><legend>{{ t('Foto') }}</legend>
+    <fieldset v-if="S.T?.menu_display !== 'text'"><legend>{{ t('Foto') }}</legend>
       <img v-if="it?.image_key && !photo" id="oldImg" alt="" :src="media(it.image_key)" /><canvas v-show="photo" id="prev" ref="prev" width="320" height="240" />
       <input type="file" accept="image/*" @change="onPhoto" />
       <div v-if="photo" class="grid2"><label>{{ t('Geser kiri-kanan') }}<input v-model.number="px" type="range" min="0" max="100" /></label><label>{{ t('Geser atas-bawah') }}<input v-model.number="py" type="range" min="0" max="100" /></label></div>

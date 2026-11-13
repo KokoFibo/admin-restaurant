@@ -89,3 +89,8 @@ Pasang: jalankan `supabase/09-tagihan.sql` di SQL Editor **setelah 01–06 dan 0
 - **Kitchen / Service**: tidak melihat harga/status bayar; Service hanya melihat penanda "Minta bill" (tanpa nominal). Catatan: pembatasan ini ada di tampilan; kolom `orders.total_idr` tetap bisa dibaca anggota restoran lewat API Supabase (RLS tingkat baris, bukan kolom).
 - Fungsi `set_order_payment` lama dinonaktifkan (pembayaran hanya lewat `pay_bill`). Pesanan pada tagihan lunas tidak bisa dibatalkan sebelum pembayarannya dibatalkan.
 - **Koreksi & undo** (`supabase/10-tagihan-koreksi.sql`, jalankan setelah 09): gabung meja, gabung tagihan, pisah pesanan, dan diskon tercatat di *Riwayat tindakan*. Tombol **Urungkan** mengembalikan tindakan terakhir (berurutan; pesanan yang masuk setelah gabung kembali ke tagihan mejanya). Hanya sebelum dibayar: saat lunas riwayat dikunci, juga setelah "Batalkan pembayaran".
+
+## Tampilan menu: dengan foto / teks saja
+
+Pasang: jalankan `supabase/11-tampilan-menu.sql` (aman diulang). **Owner** memilih di tab Restoran → *Tampilan menu*. Mode **Teks saja**: website menampilkan daftar ringkas (nama, deskripsi, harga, penanda) tanpa foto, dan kolom foto di form menu disembunyikan. Foto yang sudah ada tidak dihapus sehingga bisa kembali ke mode foto kapan saja; foto hero dan banner tidak terpengaruh. Field API baru: `site.menu_display` (`photo` | `text`).
+
