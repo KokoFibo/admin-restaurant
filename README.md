@@ -94,3 +94,6 @@ Pasang: jalankan `supabase/09-tagihan.sql` di SQL Editor **setelah 01–06 dan 0
 
 Pasang: jalankan `supabase/11-tampilan-menu.sql` (aman diulang). **Owner** memilih di tab Restoran → *Tampilan menu*. Mode **Teks saja**: website menampilkan daftar ringkas (nama, deskripsi, harga, penanda) tanpa foto, dan kolom foto di form menu disembunyikan. Foto yang sudah ada tidak dihapus sehingga bisa kembali ke mode foto kapan saja; foto hero dan banner tidak terpengaruh. Field API baru: `site.menu_display` (`photo` | `text`).
 
+## Nama template
+
+Template `aisin` kini bernama tampilan **Arunika**. Jalankan `supabase/12-nama-template.sql` (aman diulang). Id teknis `aisin` tidak berubah, jadi restoran, tautan pendaftaran, dan frontend lama tetap bekerja.

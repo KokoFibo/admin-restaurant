@@ -20,7 +20,7 @@ create table if not exists public.templates (
 alter table public.templates enable row level security;
 drop policy if exists "publik baca template" on public.templates;
 create policy "publik baca template" on public.templates for select to anon, authenticated using (is_active);
-insert into public.templates (id, name, description, sort) values ('aisin', 'Aisin', 'Tenang dan elegan, cocok untuk restoran vegetarian/vegan.', 1) on conflict (id) do nothing;
+insert into public.templates (id, name, description, sort) values ('aisin', 'Arunika', 'Tenang dan elegan, cocok untuk restoran vegetarian/vegan.', 1) on conflict (id) do nothing;
 
 alter table public.tenants add column if not exists template_id text not null default 'aisin' references public.templates(id);
 
