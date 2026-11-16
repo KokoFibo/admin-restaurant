@@ -13,6 +13,16 @@ export async function deleteImage(key?: string) {
   if (!key || !(key.startsWith('restaurant/tenants/') || key.startsWith('tenants/'))) return;
   await fetch(`/api/upload?tenant_id=${S.tid}&key=${encodeURIComponent(key)}`, { method: 'DELETE', headers: await authHeader() }).catch(() => {});
 }
+/** Foto profil: milik akun sendiri, jalur restaurant/avatars/<id-pengguna>/…; tidak terkait restoran. */
+export async function uploadAvatar(blob: Blob): Promise<string> {
+  const r = await fetch('/api/upload', { method: 'POST', headers: { ...(await authHeader()), 'x-kind': 'avatar', 'content-type': 'image/webp' }, body: blob });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || t('Gagal mengunggah foto'));
+  return (await r.json()).key;
+}
+export async function deleteAvatar(key?: string) {
+  if (!key || !key.startsWith('restaurant/avatars/')) return;
+  await fetch(`/api/upload?kind=avatar&key=${encodeURIComponent(key)}`, { method: 'DELETE', headers: await authHeader() }).catch(() => {});
+}
 export async function translate(source: string, target: string, fields: Record<string, string>): Promise<{ fields: Record<string, string>; over: string[] }> {
   const r = await fetch('/api/translate', { method: 'POST', headers: { 'content-type': 'application/json', ...(await authHeader()) }, body: JSON.stringify({ tenant_id: S.tid, source, target, fields }) });
   if (!r.ok) { const e: any = new Error(String(r.status)); e.detail = (await r.json().catch(() => ({}))).detail; throw e; }

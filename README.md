@@ -85,15 +85,26 @@ Pasang: jalankan `supabase/09-tagihan.sql` di SQL Editor **setelah 01–06 dan 0
 
 - **Pelanggan**: pesanan tetap per pelanggan; pesanan susulan dari meja yang sama otomatis masuk tagihan yang sama. Batas: maks 15 pelanggan (perangkat) per meja, 1 pesanan / 10 detik per perangkat. Tombol **Minta bill** memanggil `POST /v1/bill-request`.
 - **Kasir / Manager / Owner** — tab **Tagihan**: gabungkan 2+ meja, pisahkan pesanan, diskon manual, bayar sekali dengan beberapa metode (jumlah harus pas, tidak dicicil; tunai menghitung kembalian). **Batalkan pembayaran** dan **Tutup paksa** hanya Manager/Owner.
-- **Owner** — tab Restoran → *Pembayaran*: persen biaya layanan dan pajak. Urutan: (subtotal − diskon) + biaya layanan, lalu pajak; disalin ke tagihan saat lunas.
+- **Owner** — tab Pengaturan → *Pembayaran*: persen biaya layanan dan pajak. Urutan: (subtotal − diskon) + biaya layanan, lalu pajak; disalin ke tagihan saat lunas.
 - **Kitchen / Service**: tidak melihat harga/status bayar; Service hanya melihat penanda "Minta bill" (tanpa nominal). Catatan: pembatasan ini ada di tampilan; kolom `orders.total_idr` tetap bisa dibaca anggota restoran lewat API Supabase (RLS tingkat baris, bukan kolom).
 - Fungsi `set_order_payment` lama dinonaktifkan (pembayaran hanya lewat `pay_bill`). Pesanan pada tagihan lunas tidak bisa dibatalkan sebelum pembayarannya dibatalkan.
 - **Koreksi & undo** (`supabase/10-tagihan-koreksi.sql`, jalankan setelah 09): gabung meja, gabung tagihan, pisah pesanan, dan diskon tercatat di *Riwayat tindakan*. Tombol **Urungkan** mengembalikan tindakan terakhir (berurutan; pesanan yang masuk setelah gabung kembali ke tagihan mejanya). Hanya sebelum dibayar: saat lunas riwayat dikunci, juga setelah "Batalkan pembayaran".
 
 ## Tampilan menu: dengan foto / teks saja
 
-Pasang: jalankan `supabase/11-tampilan-menu.sql` (aman diulang). **Owner** memilih di tab Restoran → *Tampilan menu*. Mode **Teks saja**: website menampilkan daftar ringkas (nama, deskripsi, harga, penanda) tanpa foto, dan kolom foto di form menu disembunyikan. Foto yang sudah ada tidak dihapus sehingga bisa kembali ke mode foto kapan saja; foto hero dan banner tidak terpengaruh. Field API baru: `site.menu_display` (`photo` | `text`).
+Pasang: jalankan `supabase/11-tampilan-menu.sql` (aman diulang). **Owner** memilih di tab Pengaturan → *Tampilan menu*. Mode **Teks saja**: website menampilkan daftar ringkas (nama, deskripsi, harga, penanda) tanpa foto, dan kolom foto di form menu disembunyikan. Foto yang sudah ada tidak dihapus sehingga bisa kembali ke mode foto kapan saja; foto hero dan banner tidak terpengaruh. Field API baru: `site.menu_display` (`photo` | `text`).
 
 ## Nama template
 
 Template `aisin` kini bernama tampilan **Arunika**. Jalankan `supabase/12-nama-template.sql` (aman diulang). Id teknis `aisin` tidak berubah, jadi restoran, tautan pendaftaran, dan frontend lama tetap bekerja.
+
+## Tampilan, profil, dan aplikasi (PWA)
+
+- **Tab Pengaturan** (dulu "Restoran"): terlihat oleh semua peran. Panel restoran (profil, tampilan menu, pembayaran, dll.) hanya untuk Owner; peran lain hanya melihat panel **Perangkat ini**.
+- **Bilah atas:** kiri hanya nama toko; kanan lingkaran **Profil** berisi email dan peran, pilihan tampilan (Otomatis / Terang / Gelap), ubah foto profil, ubah kata sandi, pasang aplikasi, dan keluar.
+- **Foto profil:** milik akun sendiri, dikecilkan 256×256 WebP di browser (maks 60 KB), disimpan di R2 pada `restaurant/avatars/<id-pengguna>/<kode>.webp`; yang tersimpan di data pengguna hanya nama berkasnya (`avatar_key`). Endpoint: `POST /api/upload` dengan `x-kind: avatar` (cukup login) dan `DELETE /api/upload?kind=avatar&key=…` (hanya jalur milik sendiri). **Fungsi server admin perlu di-deploy ulang.**
+- **Mode terang/gelap:** warna diatur lewat variabel CSS; `<html data-theme>` diterapkan sebelum halaman digambar. Pilihan disimpan **per perangkat** (`localStorage: admin_theme`), bawaan mengikuti perangkat. Semua pasangan teks/latar ≥ 4,5:1 dan batas kolom isian ≥ 3:1. QR dan cetakan tetap terang.
+- **PWA:** `public/manifest.webmanifest`, ikon di `public/icons/` (ganti berkas PNG jika ada logo resmi: 192, 512, maskable 512, dan `apple-touch-icon.png` 180), dan `public/sw.js`. Service worker hanya menyimpan kerangka aplikasi, berkas `/assets/*`, dan font. **`/api`, `/v1`, Supabase, dan semua permintaan non-GET tidak pernah di-cache**, jadi panel tidak bisa mencatat pesanan atau pembayaran tanpa internet (bilah "Tidak ada koneksi" tampil). Setiap build menulis `version.json`; bila berbeda dengan versi yang sedang berjalan, muncul bilah "Versi baru tersedia — Muat ulang" (tidak memuat ulang sendiri). Header cache ada di `public/_headers`.
+- **Jaga layar tetap menyala** (Pengaturan → Perangkat ini): memakai Screen Wake Lock API, disimpan per perangkat; dipasang ulang saat halaman kembali terlihat. Tidak semua browser mendukung.
+- Catatan: notifikasi saat aplikasi ditutup/layar terkunci belum ada (butuh Web Push dari server); bunyi pesanan hanya saat panel terbuka.
+

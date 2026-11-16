@@ -1,18 +1,19 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { t, applyLang, lang } from '../lib/i18n';
-import { S, ROLE_LABEL, role, can, logout, selectTenant, setTab, siteBase, toast, load, billReqs, loadBillReqs } from '../store';
+import { S, can, selectTenant, setTab, siteBase, toast, load, billReqs, loadBillReqs, online, updateReady, checkVersion } from '../store';
 import { sb } from '../lib/supabase';
 import OrdersTab from './OrdersTab.vue'; import BillsTab from './BillsTab.vue'; import MenuTab from './MenuTab.vue'; import CategoriesTab from './CategoriesTab.vue';
-import SiteTab from './SiteTab.vue'; import BannersTab from './BannersTab.vue'; import TablesTab from './TablesTab.vue'; import RestaurantTab from './RestaurantTab.vue'; import AccountsTab from './AccountsTab.vue'; import PasswordDialog from './PasswordDialog.vue';
-const pw = ref<any>();
+import SiteTab from './SiteTab.vue'; import BannersTab from './BannersTab.vue'; import TablesTab from './TablesTab.vue'; import RestaurantTab from './RestaurantTab.vue'; import AccountsTab from './AccountsTab.vue'; import PasswordDialog from './PasswordDialog.vue'; import ProfileMenu from './ProfileMenu.vue'; import AvatarDialog from './AvatarDialog.vue';
+const pw = ref<any>(), av = ref<any>();
 let reqTimer: any;
 watch(() => S.tid, () => { billReqs.value = []; loadBillReqs(); }, { immediate: true });
-onMounted(() => { reqTimer = setInterval(() => document.visibilityState === 'visible' && loadBillReqs(), 6000); }); onUnmounted(() => clearInterval(reqTimer));
-const tabs = computed<[string, string][]>(() => ([['orders', t('Pesanan'), true], ['bills', t('Tagihan') + (billReqs.value.length ? ` 🔔${billReqs.value.length}` : ''), can.pay()], ['menu', t('Menu'), true], ['cats', t('Kategori'), can.edit()], ['tables', t('Meja'), can.edit()], ['resto', t('Restoran'), can.resto()], ['site', t('Tampilan Website'), can.site()], ['banner', t('Banner'), can.banner()], ['akun', t('Akun'), can.accounts()]] as [string, string, boolean][]).filter(x => x[2]).map(x => [x[0], x[1]]));
+onMounted(() => { checkVersion(); reqTimer = setInterval(() => document.visibilityState === 'visible' && loadBillReqs(), 6000); }); onUnmounted(() => clearInterval(reqTimer));
+const tabs = computed<[string, string][]>(() => ([['orders', t('Pesanan'), true], ['bills', t('Tagihan') + (billReqs.value.length ? ` 🔔${billReqs.value.length}` : ''), can.pay()], ['menu', t('Menu'), true], ['cats', t('Kategori'), can.edit()], ['tables', t('Meja'), can.edit()], ['resto', t('Pengaturan'), true], ['site', t('Tampilan Website'), can.site()], ['banner', t('Banner'), can.banner()], ['akun', t('Akun'), can.accounts()]] as [string, string, boolean][]).filter(x => x[2]).map(x => [x[0], x[1]]));
 const view = { orders: OrdersTab, bills: BillsTab, menu: MenuTab, cats: CategoriesTab, tables: TablesTab, resto: RestaurantTab, site: SiteTab, banner: BannersTab, akun: AccountsTab } as any;
 const name = computed(() => (S.tenTr.find((x: any) => x.lang === S.TL[0])?.brand_name || S.T?.slug || ''));
 const site = computed(siteBase);
+const location = window.location;
 const paused = computed(() => !!S.T?.orders_paused);
 async function togglePause() {
   const next = !paused.value; if (next && !confirm(t('Tutup pemesanan QR sementara? Pelanggan tidak bisa memesan sampai dibuka lagi.'))) return;
@@ -23,13 +24,15 @@ function pick(l: 'id' | 'en') { applyLang(l); if (S.uid) sb.auth.updateUser({ da
 </script>
 <template>
   <div class="adm-shell">
-    <header class="ah"><b>{{ S.T ? 'Admin · ' + name : 'Admin' }}</b>
-      <span><span class="who">{{ S.email }} <span v-if="S.T" class="rolebadge">{{ ROLE_LABEL[role()] || t('Tanpa role') }}</span></span>
-        <select v-if="S.isMaster || S.tenants.length > 1" :value="S.tid" @change="selectTenant(($event.target as any).value)"><option v-for="x in S.tenants" :key="x.id" :value="x.id">{{ x.slug }}</option></select>
+    <header class="ah"><b class="brand">{{ S.T ? name : 'Dapora' }}</b>
+      <span class="ah-r">
+        <select v-if="S.isMaster || S.tenants.length > 1" :aria-label="t('Restoran')" :value="S.tid" @change="selectTenant(($event.target as any).value)"><option v-for="x in S.tenants" :key="x.id" :value="x.id">{{ x.slug }}</option></select>
         <span class="langsw"><button type="button" :class="{ on: lang === 'id' }" @click="pick('id')">ID</button><button type="button" :class="{ on: lang === 'en' }" @click="pick('en')">EN</button></span>
         <button v-if="S.T && can.banner()" class="btn ghost pausebtn" :class="{ on: paused }" @click="togglePause">{{ paused ? t('Pemesanan: DITUTUP — buka lagi') : t('Tutup sementara') }}</button>
         <a v-if="site" :href="site" target="_blank" rel="noopener">{{ t('Lihat website ↗') }}</a>
-        <button class="btn ghost" @click="pw.open()">{{ t('Kata sandi saya') }}</button><button class="btn ghost" @click="logout()">{{ t('Keluar') }}</button></span></header>
+        <ProfileMenu @password="pw.open()" @avatar="av.open()" /></span></header>
+    <div v-if="!online" class="sbar" role="status">{{ t('Tidak ada koneksi internet. Pesanan dan tagihan tidak bisa disimpan sampai tersambung lagi.') }}</div>
+    <div v-if="updateReady" class="sbar upd" role="status">{{ t('Versi baru tersedia.') }} <button type="button" @click="location.reload()">{{ t('Muat ulang') }}</button></div>
     <div class="wrap">
       <p v-if="S.noTenant" class="err">{{ t('Akun ini belum terhubung ke restoran mana pun, atau sedang dinonaktifkan. Hubungi Owner atau pengelola layanan.') }}</p>
       <template v-else-if="S.T">
@@ -37,6 +40,6 @@ function pick(l: 'id' | 'en') { applyLang(l); if (S.uid) sb.auth.updateUser({ da
         <component :is="view[S.tab] || MenuTab" :key="S.tid + S.tab" />
       </template>
     </div>
-    <PasswordDialog ref="pw" />
+    <PasswordDialog ref="pw" /><AvatarDialog ref="av" />
   </div>
 </template>
