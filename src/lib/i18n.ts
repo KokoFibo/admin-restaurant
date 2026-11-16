@@ -7,5 +7,5 @@ export const t = (id: string, ...a: any[]) => {
   a.forEach((v, i) => (s = s.split('{' + i + '}').join(String(v))));
   return s;
 };
-export const applyLang = (l: 'id' | 'en') => { lang.value = l; localStorage.setItem('admin_lang', l); document.documentElement.lang = l; document.title = t('Admin'); };
+export const applyLang = (l: 'id' | 'en') => { lang.value = l; localStorage.setItem('admin_lang', l); document.documentElement.lang = l; document.title = 'Dapora Admin'; };
 export const rp = (n: number) => 'Rp ' + Number(n).toLocaleString('id-ID');

@@ -3,9 +3,10 @@ import { reactive, ref, watch } from 'vue';
 import { t } from '../lib/i18n';
 import { sb } from '../lib/supabase';
 import { translate, trErr } from '../lib/api';
-import { S, TYPES, TYPE_DEFAULTS, optionMeta, enabled, lim, load, toast } from '../store';
+import { S, TYPES, TYPE_DEFAULTS, optionMeta, enabled, lim, load, toast, can } from '../store';
 import Field from './Field.vue';
 import PurgePanel from './PurgePanel.vue';
+import DevicePanel from './DevicePanel.vue';
 const p = reactive<any>({ phone: '', wa: '', email: '', maps: '', address: '', lunch: '', tea: '', dinner: '', tr: {} }), mst = reactive<any>({ type: 'vegan', alang: 'id', l1: 'id', l2: '', tz: 'Asia/Jakarta', opts: {} });
 const pMsg = ref(''), mMsg = ref(''), bill = reactive<any>({ tax: 0, service: 0 }), bMsg = ref(''), mode = ref('photo'), dMsg = ref('');
 function init() {
@@ -54,6 +55,7 @@ async function saveMaster() {
 </script>
 <template>
   <div>
+    <template v-if="can.resto()">
     <form class="panel" @submit.prevent="saveProfile"><h3>{{ t('Profil & kontak') }}</h3>
       <div class="grid2"><label>{{ t('Telepon') }}<input v-model="p.phone" /></label><label>WhatsApp<input v-model="p.wa" /></label><label>Email<input v-model="p.email" /></label>
         <label>{{ t('Peta: tautan Google Maps') }}<input v-model="p.maps" placeholder="https://maps.app.goo.gl/…" /></label></div>
@@ -85,6 +87,8 @@ async function saveMaster() {
       <p class="hint">{{ t('Maksimal 2 bahasa. Terjemahan bahasa yang dinonaktifkan tidak dihapus.') }}</p>
       <p class="err">{{ mMsg }}</p><div class="row"><button class="btn vm" type="submit">{{ t('Simpan pengaturan master') }}</button></div></form>
     <p v-else class="hint">{{ t('Tipe restoran: {0} · Bahasa: {1}. Perubahan dilakukan oleh Super Admin.', TYPES[S.T.restaurant_type], S.TL.map((c: string) => lim(c).name_native).join(', ')) }}</p>
+    </template>
+    <DevicePanel />
     <PurgePanel v-if="S.isMaster" />
   </div>
 </template>

@@ -9,7 +9,7 @@ export const TYPE_DEFAULTS: Record<string, string[]> = { vegan: ['has_onion', 'i
 export const optionMeta = (): [string, string][] => [['has_egg', t('Mengandung telur')], ['has_onion', t('Mengandung bawang')], ['is_non_halal', t('Non halal')], ['is_spicy', t('Pedas & tingkat kepedasan')]];
 
 export const S = reactive<any>({
-  view: 'boot' as 'boot' | 'login' | 'panel' | 'recover', uid: '', email: '', isMaster: false, tenants: [], tid: '', myRoles: {}, tab: 'menu', noTenant: false,
+  view: 'boot' as 'boot' | 'login' | 'panel' | 'recover', uid: '', email: '', avatar: '', isMaster: false, tenants: [], tid: '', myRoles: {}, tab: 'menu', noTenant: false,
   langsAll: [], T: null, TL: ['id'], cats: [], items: [], catTr: [], itTr: [], tenTr: [], members: [], tables: [], domains: [],
 });
 /** Penanda "minta bill" dari pelanggan (tanpa nominal) — dibaca kasir/manager/owner dan Service. */
@@ -22,6 +22,17 @@ export async function loadBillReqs() {
   if (billReqInit && fresh.length) toast(t('Minta bill: {0}', fresh.map((x: any) => x.label).join(', ')));
   billReqInit = true;
 }
+/* ---------- PWA: pasang aplikasi, status koneksi, versi baru ---------- */
+export const installEvt = ref<any>(null);
+export const isStandalone = () => matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true;
+export const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+export const online = ref(navigator.onLine);
+export const updateReady = ref(false);
+export async function checkVersion() {
+  if (!import.meta.env.PROD || !navigator.onLine) return;
+  try { const r = await fetch('/version.json', { cache: 'no-store' }); if (r.ok && (await r.json()).id !== __BUILD_ID__) updateReady.value = true; } catch { /* abaikan */ }
+}
+export const AVATAR_RE = /^restaurant\/avatars\/[0-9a-f-]{36}\/[a-z0-9-]+\.webp$/;
 export const toastMsg = ref(''); let toastTimer: any;
 export const toast = (m: string) => { toastMsg.value = m; clearTimeout(toastTimer); toastTimer = setTimeout(() => (toastMsg.value = ''), 4200); };
 /** Daftar meja yang QR-nya sedang ditampilkan (null = tertutup). */
@@ -76,6 +87,7 @@ export const logout = () => sb.auth.signOut();
 
 async function start() {
   const { data } = await sb.auth.getUser(); S.uid = data.user?.id || ''; S.email = data.user?.email || '';
+  const ak = data.user?.user_metadata?.avatar_key; S.avatar = typeof ak === 'string' && AVATAR_RE.test(ak) ? ak : '';
   const userLang = data.user?.user_metadata?.admin_lang; if (userLang === 'en' || userLang === 'id') applyLang(userLang);
   const [tn, pa, lg, mm] = await Promise.all([sb.from('tenants').select('id,slug').order('slug'), sb.from('platform_admins').select('user_id').eq('user_id', S.uid),
     sb.from('languages').select('*').order('sort'), sb.from('tenant_members').select('tenant_id,role').eq('user_id', S.uid)]);
