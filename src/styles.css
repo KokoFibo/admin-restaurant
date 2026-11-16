@@ -74,7 +74,7 @@ fieldset{border:1px solid var(--line);border-radius:6px;padding:1rem;display:gri
 .av{width:3rem;height:3rem;flex:none;border-radius:50%;background:var(--jade);color:var(--bg);display:grid;place-items:center;font:600 1.2rem var(--sans);overflow:hidden}
 .pm-pop{position:absolute;right:0;top:calc(100% + .5rem);width:17rem;max-width:calc(100vw - 2rem);background:var(--bg);border:1px solid var(--line2);border-radius:10px;box-shadow:var(--shadow);padding:.5rem;z-index:30;display:grid;gap:.15rem}
 .pm-head{display:flex;gap:.7rem;align-items:center;padding:.5rem .5rem .8rem;border-bottom:1px solid var(--line);margin-bottom:.3rem}
-.pm-head>div{min-width:0;display:grid;gap:.25rem;justify-items:start}.pm-head b{font-size:.85rem;word-break:break-all;font-weight:600;color:var(--ink)}
+.pm-head>div{min-width:0;display:grid;gap:.25rem;justify-items:start;width:100%}
 .pm-item{display:block;width:100%;text-align:left;padding:.65rem .7rem;border:0;border-radius:6px;background:transparent;font:500 .9rem var(--sans);color:var(--ink);cursor:pointer}
 .pm-item:hover,.pm-item:focus-visible{background:var(--bg2)}.pm-item.out{color:var(--vm);font-weight:600}
 .pm-lbl{font:600 .72rem var(--sans);color:var(--ink2);padding:.4rem .7rem 0;letter-spacing:.03em}
@@ -88,3 +88,26 @@ fieldset{border:1px solid var(--line);border-radius:6px;padding:1rem;display:gri
 .avprev{display:flex;gap:1rem;align-items:center;flex-wrap:wrap}.avprev canvas{width:8rem;height:8rem;border-radius:50%;border:1px solid var(--line2);background:var(--bg2)}
 dialog{margin:auto}   /* aturan *{margin:0} menimpa pemusatan bawaan dialog */
 input[type=range],input[type=checkbox],input[type=radio]{accent-color:var(--jade)}
+/* ---- Email panjang di menu Profil: satu baris berelipsis, ketuk untuk melihat lengkap ---- */
+.pm-mail{all:unset;display:block;max-width:100%;box-sizing:border-box;font:600 .85rem var(--sans);color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;border-radius:4px}
+.pm-mail.full{white-space:normal;overflow-wrap:anywhere}.pm-mail:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.pm-sm{display:none}
+/* ---- Tanpa luapan ke samping ---- */
+.grid2{grid-template-columns:repeat(2,minmax(0,1fr))}.grid2>*{min-width:0}.grid2 input,.grid2 select,.grid2 textarea{width:100%;min-width:0}
+.bgrid{grid-template-columns:repeat(auto-fill,minmax(min(100%,23rem),1fr))}
+.ah .brand{min-width:0;overflow-wrap:anywhere}
+/* ---- HP (≤ 640px): bilah atas ringkas, tab satu baris yang bisa digeser ---- */
+@media(max-width:640px){
+  .grid2{grid-template-columns:minmax(0,1fr)}
+  .ah{justify-content:flex-start;gap:0 .75rem;padding-bottom:.6rem}
+  .ah .brand{order:1;flex:1 1 0;font-size:1.05rem;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .ah>.ah-r{display:contents}   /* menimpa .ah>span{display:flex} */
+  .ah .pm{order:2;flex:none}
+  .ah::after{content:'';order:2;flex-basis:100%;height:0}
+  .ah .pausebtn,.ah-r>select{order:3;margin-top:.5rem}
+  .ah .pausebtn{padding:.35rem .8rem;font-size:.8rem}
+  .hd-lang,.hd-site{display:none!important}
+  .pm-sm{display:block}
+  .adm .tabs{position:relative;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:.35rem;margin-bottom:1rem}
+  .adm .tabs::-webkit-scrollbar{display:none}.adm .tabs button{flex:none;white-space:nowrap}
+}
