@@ -454,4 +454,6 @@ export const EN: Record<string, string> = {
  "Browser ini tidak mendukung fitur ini.": "This browser does not support this feature.",
  "Aktif: layar tidak akan mati selama halaman ini terbuka.": "Active: the screen will not turn off while this page is open.",
  "Belum aktif. Akan aktif saat halaman terbuka dan terlihat.": "Not active yet. It turns on while the page is open and visible.",
+ "Bahasa": "Language",
+ "Ketuk untuk melihat email lengkap": "Tap to see the full email",
 };
