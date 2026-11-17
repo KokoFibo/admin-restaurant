@@ -34,20 +34,20 @@ async function guard(request: Request, e: any, tenantId: string, kind: string) {
   const sb = createClient(url, anon, { auth: { persistSession: false }, global: { headers: { Authorization: `Bearer ${token}` } } });
   const { data, error } = await sb.auth.getUser(token);
   if (error || !data?.user) return { res: json({ error: 'Unauthorized' }, 401) };
-  // foto menu: owner/manager; foto website (hero): hanya owner — diputuskan DATABASE
-  const m = await sb.rpc(kind === 'site' ? 'can_edit_site' : 'can_edit_menu', { p_tenant: tenantId });
+  // foto menu: owner/manager; foto website (hero) dan gambar QRIS: hanya owner — diputuskan DATABASE
+  const m = await sb.rpc(kind === 'site' || kind === 'qris' ? 'can_edit_site' : 'can_edit_menu', { p_tenant: tenantId });
   if (m.error || m.data !== true) return { res: json({ error: 'Akses ditolak' }, 403) };
   const t = await sb.from('tenants').select('slug').eq('id', tenantId).maybeSingle();
   const slug = t.data?.slug; if (!slug || !/^[a-z0-9-]+$/.test(slug)) return { res: json({ error: 'Restoran tidak ditemukan' }, 404) };
   return { slug, aws: new AwsClient({ accessKeyId: id, secretAccessKey: secret, service: 's3', region: 'auto' }), base: `${endpoint.replace(/\/$/, '')}/${bucket}` };
 }
 
-// Unggah foto WebP: body = berkas WebP; header x-tenant-id, x-kind (menu | site | avatar), x-name (nama menu, untuk nama berkas).
+// Unggah foto WebP: body = berkas WebP; header x-tenant-id, x-kind (menu | site | qris | avatar), x-name (nama menu, untuk nama berkas).
 // kind=avatar (foto profil): tanpa x-tenant-id; hanya perlu login; jalur restaurant/avatars/<id-pengguna>/<kode>.webp; maks 60 KB.
-// Jalur di R2: restaurant/tenants/<slug-restoran>/<menu|site>/<nama>-<kode>.webp
+// Jalur di R2: restaurant/tenants/<slug-restoran>/<menu|site|qris>/<nama>-<kode>.webp (qris = gambar QRIS statis restoran, untuk pesanan online bayar di muka)
 export const onRequestPost = async ({ request, env: e }: any) => {
   const tenantId = request.headers.get('x-tenant-id') || '', kind = request.headers.get('x-kind') || 'menu';
-  if (!['menu', 'site', 'avatar'].includes(kind)) return json({ error: 'Bad request' }, 400);
+  if (!['menu', 'site', 'qris', 'avatar'].includes(kind)) return json({ error: 'Bad request' }, 400);
   const u = kind === 'avatar' ? await userGuard(request, e) : null; if (u?.res) return u.res;
   const g = u ? null : await guard(request, e, tenantId, kind); if (g?.res) return g.res;
   const buf = await request.arrayBuffer();
@@ -79,8 +79,8 @@ export const onRequestDelete = async ({ request, env: e }: any) => {
     const adel = await u.aws.fetch(`${u.base}/${key}`, { method: 'DELETE' });
     return adel.ok || adel.status === 404 ? json({ ok: true }) : json({ error: 'Gagal menghapus foto' }, 502);
   }
-  const g = await guard(request, e, tenantId, key.includes('/site/') ? 'site' : 'menu'); if (g.res) return g.res;
-  if (!new RegExp(`^(restaurant/tenants/${g.slug}|tenants/${tenantId})/(menu|site)/[a-z0-9-]+\\.webp$`, 'i').test(key)) return json({ error: 'Bad request' }, 400);
+  const g = await guard(request, e, tenantId, key.includes('/site/') ? 'site' : key.includes('/qris/') ? 'qris' : 'menu'); if (g.res) return g.res;
+  if (!new RegExp(`^(restaurant/tenants/${g.slug}|tenants/${tenantId})/(menu|site|qris)/[a-z0-9-]+\\.webp$`, 'i').test(key)) return json({ error: 'Bad request' }, 400);
   const del = await g.aws!.fetch(`${g.base}/${key}`, { method: 'DELETE' });
   return del.ok || del.status === 404 ? json({ ok: true }) : json({ error: 'Gagal menghapus foto' }, 502);
 };

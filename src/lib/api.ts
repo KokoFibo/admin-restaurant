@@ -4,7 +4,7 @@ import { slug } from './image';
 import { S } from '../store';
 
 /** Unggah WebP ke R2 lewat /api/upload (Functions di subdomain admin yang sama). */
-export async function uploadImage(blob: Blob, name: string, kind: 'menu' | 'site' = 'menu'): Promise<string> {
+export async function uploadImage(blob: Blob, name: string, kind: 'menu' | 'site' | 'qris' = 'menu'): Promise<string> {
   const r = await fetch('/api/upload', { method: 'POST', headers: { ...(await authHeader()), 'x-tenant-id': S.tid, 'x-kind': kind, 'x-name': slug(name) || 'foto', 'content-type': 'image/webp' }, body: blob });
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || t('Gagal mengunggah foto'));
   return (await r.json()).key;

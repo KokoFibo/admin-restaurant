@@ -22,6 +22,19 @@ export async function loadBillReqs() {
   if (billReqInit && fresh.length) toast(t('Minta bill: {0}', fresh.map((x: any) => x.label).join(', ')));
   billReqInit = true;
 }
+/** Pesanan online yang menunggu konfirmasi (hanya Owner/Manager/Cashier yang bisa melihatnya). Dipakai lencana tab, bunyi, dan daftar di tab Pesanan. */
+export const onlinePending = ref<any[]>([]); let onlineInit = false;
+export async function loadOnlinePending() {
+  const tid = S.tid;
+  if (!tid || !can.pay()) { onlinePending.value = []; onlineInit = false; return; }
+  await sb.rpc('sweep_online_orders', { p_tenant: tid });                     // pesanan yang lewat 15 menit → kedaluwarsa
+  const { data, error } = await sb.from('orders').select('id,order_no,customer_name,created_at').eq('tenant_id', tid).eq('status', 'pending').order('created_at', { ascending: true }).limit(100);
+  if (error || tid !== S.tid) return;
+  const old = new Set(onlinePending.value.map((x: any) => x.id)), fresh = (data || []).filter((x: any) => !old.has(x.id));
+  onlinePending.value = data || [];
+  if (onlineInit && fresh.length) toast(t('Pesanan online baru: {0}', fresh.map((x: any) => `#${x.order_no} ${x.customer_name || ''}`.trim()).join(', ')));
+  onlineInit = true;
+}
 /* ---------- PWA: pasang aplikasi, status koneksi, versi baru ---------- */
 export const installEvt = ref<any>(null);
 export const isStandalone = () => matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true;

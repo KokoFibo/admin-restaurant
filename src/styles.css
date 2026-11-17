@@ -111,3 +111,11 @@ input[type=range],input[type=checkbox],input[type=radio]{accent-color:var(--jade
   .adm .tabs{position:relative;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:.35rem;margin-bottom:1rem}
   .adm .tabs::-webkit-scrollbar{display:none}.adm .tabs button{flex:none;white-space:nowrap}
 }
+
+/* ---- pesanan online ---- */
+.osec{margin:0 0 1.4rem;padding:.9rem 1rem 1rem;border:2px solid var(--vm);border-radius:10px;background:var(--bg2)}
+.osec h3{margin:0 0 .3rem}
+.ocard.st-pending{border-left-color:var(--vm)}
+.ocard.st-rejected,.ocard.st-expired{opacity:.65;border-left-color:#999}
+.qrisprev{display:block;max-width:14rem;width:100%;height:auto;background:#fff;border:1px solid var(--line);border-radius:8px;padding:.4rem;margin:.4rem 0}
+.copyrow{display:flex;gap:.4rem;flex-wrap:wrap;align-items:center}.copyrow input{flex:1 1 14rem;min-width:0}
