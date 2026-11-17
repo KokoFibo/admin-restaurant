@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { reactive, ref, watch } from 'vue';
 import { t } from '../lib/i18n';
-import { sb } from '../lib/supabase';
-import { translate, trErr } from '../lib/api';
-import { S, TYPES, TYPE_DEFAULTS, optionMeta, enabled, lim, load, toast, can } from '../store';
+import { sb, media } from '../lib/supabase';
+import { translate, trErr, uploadImage, deleteImage } from '../lib/api';
+import { S, TYPES, TYPE_DEFAULTS, optionMeta, enabled, lim, load, toast, can, siteBase } from '../store';
 import Field from './Field.vue';
 import PurgePanel from './PurgePanel.vue';
 import DevicePanel from './DevicePanel.vue';
@@ -28,6 +28,35 @@ async function saveBilling() {
   if (!(tax >= 0 && tax <= 100 && svc >= 0 && svc <= 100)) return (bMsg.value = t('Persentase harus antara 0 dan 100.'));
   bMsg.value = t('Menyimpan…'); const { error } = await sb.rpc('set_tenant_billing', { p_tenant: S.tid, p_tax: tax, p_service: svc });
   if (error) return (bMsg.value = error.message); bMsg.value = ''; toast(t('Tersimpan')); load();
+}
+
+/* ---------- pesanan online ---------- */
+const onl = reactive<any>({ on: false, prepay: false, key: '', note: '' }), oMsg = ref(''), qBusy = ref(false), qNew = ref('');
+watch(() => S.T, T => { Object.assign(onl, { on: !!T?.online_enabled, prepay: !!T?.online_prepay_enabled, key: T?.qris_image_key || '', note: T?.pickup_note || '' }); qNew.value = ''; }, { immediate: true });
+const orderLink = () => (siteBase() ? siteBase() + '/pesan' : '');
+const qrisUrl = () => media(onl.key);
+async function copyLink() { try { await navigator.clipboard.writeText(orderLink()); toast(t('Tautan disalin')); } catch { toast(orderLink()); } }
+/** Gambar QRIS: dibuat putih-latar, sisi terpanjang maks 800 px, WebP kualitas tinggi supaya tetap terbaca pemindai (maks 150 KB). */
+async function pickQris(ev: Event) {
+  const f = (ev.target as HTMLInputElement).files?.[0]; (ev.target as HTMLInputElement).value = ''; if (!f) return;
+  qBusy.value = true; oMsg.value = '';
+  try {
+    const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error(t('Berkas bukan gambar yang valid.'))); i.src = URL.createObjectURL(f); });
+    const k = Math.min(1, 800 / Math.max(img.naturalWidth, img.naturalHeight)), w = Math.round(img.naturalWidth * k), h = Math.round(img.naturalHeight * k);
+    const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d')!; x.fillStyle = '#fff'; x.fillRect(0, 0, w, h); x.imageSmoothingQuality = 'high'; x.drawImage(img, 0, 0, w, h);
+    let blob: Blob | null = null; for (const q of [0.98, 0.92, 0.85, 0.75]) { blob = await new Promise<Blob | null>(r => c.toBlob(r, 'image/webp', q)); if (blob && blob.size <= 150 * 1024) break; }
+    if (!blob || blob.size > 150 * 1024) throw new Error(t('Gambar terlalu besar setelah dikompres. Gunakan gambar QRIS yang lebih sederhana.'));
+    const old = qNew.value; qNew.value = await uploadImage(blob, 'qris', 'qris'); onl.key = qNew.value; if (old) deleteImage(old);
+    oMsg.value = t('Gambar QRIS terunggah. Tekan Simpan untuk menerapkan, lalu uji pindai dari ponsel lain.');
+  } catch (e: any) { oMsg.value = e?.message || t('Gagal mengunggah foto'); } finally { qBusy.value = false; }
+}
+function dropQris() { onl.key = ''; onl.prepay = false; }
+async function saveOnline() {
+  if (onl.prepay && !onl.key) return (oMsg.value = t('Unggah gambar QRIS dulu untuk mengaktifkan bayar di muka.'));
+  oMsg.value = t('Menyimpan…'); const { error } = await sb.rpc('set_online_settings', { p_tenant: S.tid, p_enabled: onl.on, p_prepay: onl.prepay, p_qris_key: onl.key || null, p_note: onl.note.trim() || null });
+  if (error) return (oMsg.value = error.message);
+  const prev = S.T?.qris_image_key; if (prev && prev !== onl.key) deleteImage(prev);
+  oMsg.value = ''; qNew.value = ''; toast(t('Tersimpan')); load();
 }
 const langs = () => S.langsAll.filter((l: any) => l.is_available);
 async function saveProfile() {
@@ -74,6 +103,20 @@ async function saveMaster() {
       <div class="grid2"><label>{{ t('Biaya layanan (%)') }}<input v-model="bill.service" type="number" min="0" max="100" step="0.01" /></label><label>{{ t('Pajak (%)') }}<input v-model="bill.tax" type="number" min="0" max="100" step="0.01" /></label></div>
       <p class="hint">{{ t('Dihitung di tagihan: (subtotal − diskon) + biaya layanan, lalu pajak atas jumlah itu. Isi 0 bila tidak dipakai. Harga menu dianggap belum termasuk keduanya. Tagihan yang sudah lunas tidak berubah.') }}</p>
       <p class="err">{{ bMsg }}</p><div class="row"><button class="btn vm" type="submit">{{ t('Simpan pembayaran') }}</button></div></form>
+    <form class="panel" @submit.prevent="saveOnline"><h3>{{ t('Pesanan online (bungkus / ambil sendiri)') }}</h3>
+      <label class="chk"><input v-model="onl.on" type="checkbox" /> {{ t('Aktifkan pesanan online') }}</label>
+      <p class="hint">{{ t('Pelanggan memesan lewat tautan di bawah (tanpa memindai QR meja). Pesanan masuk ke tab Pesanan sebagai "Menunggu konfirmasi" dan baru masuk dapur setelah Anda menerimanya. Tombol "Tutup sementara" juga menutup pesanan online.') }}</p>
+      <div v-if="orderLink()" class="copyrow"><input :value="orderLink()" readonly @focus="($event.target as HTMLInputElement).select()" /><button type="button" class="btn ghost" @click="copyLink">{{ t('Salin tautan') }}</button></div>
+      <p v-if="orderLink() && !onl.on" class="hint">{{ t('Tautan ini baru berfungsi setelah pesanan online diaktifkan dan disimpan.') }}</p>
+      <label>{{ t('Petunjuk pengambilan (opsional, tampil di halaman pesanan pelanggan)') }}<textarea v-model="onl.note" rows="2" maxlength="300" :placeholder="t('Mis. Ambil di kasir depan. Sebutkan nomor pesanan.')" /></label>
+      <fieldset><legend>{{ t('Bayar di muka via QRIS (opsional)') }}</legend>
+        <p class="hint">{{ t('Tanpa payment gateway. Pelanggan membayar ke QRIS statis restoran lalu menekan "Saya sudah bayar"; staf memeriksa di aplikasi merchant sendiri dan menekan "Pembayaran diterima". Nominal yang harus dibayar sudah termasuk pajak dan biaya layanan. Bila nominal yang masuk tidak sesuai, tolak pesanan dan kembalikan dana di luar sistem.') }}</p>
+        <img v-if="qrisUrl()" class="qrisprev" :src="qrisUrl()!" :alt="t('Gambar QRIS')" />
+        <div class="row" style="gap:.5rem;flex-wrap:wrap"><label class="btn ghost" style="cursor:pointer">{{ onl.key ? t('Ganti gambar QRIS') : t('Unggah gambar QRIS') }}<input type="file" accept="image/*" hidden :disabled="qBusy" @change="pickQris" /></label>
+          <button v-if="onl.key" type="button" class="btn ghost danger" @click="dropQris">{{ t('Hapus gambar QRIS') }}</button></div>
+        <label class="chk"><input v-model="onl.prepay" type="checkbox" :disabled="!onl.key" /> {{ t('Izinkan pelanggan memilih bayar di muka (QRIS)') }}</label>
+        <p class="hint">{{ t('Gunakan tangkapan layar atau berkas QRIS yang jelas dan tidak buram. Setelah menyimpan, coba pindai dari halaman pesan dengan ponsel lain sebelum dipakai pelanggan.') }}</p></fieldset>
+      <p class="err">{{ oMsg }}</p><div class="row"><button class="btn vm" type="submit" :disabled="qBusy">{{ t('Simpan pesanan online') }}</button></div></form>
     <form v-if="S.isMaster" class="panel" @submit.prevent="saveMaster"><h3>{{ t('Pengaturan master') }} <small class="muted">{{ t('(hanya Super Admin)') }}</small></h3>
       <div class="grid2">
         <label>{{ t('Tipe restoran') }}<select v-model="mst.type" @change="onType"><option v-for="(v, k) in TYPES" :key="k" :value="k">{{ v }}</option></select></label>

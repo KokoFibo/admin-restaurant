@@ -3,9 +3,10 @@ import App from './App.vue';
 import './styles.css';
 import { initTheme } from './lib/theme';
 import { initWake } from './lib/wakelock';
+import { initAlert } from './lib/alert';
 import { installEvt, online, checkVersion } from './store';
 
-initTheme(); initWake();
+initTheme(); initWake(); initAlert();
 createApp(App).mount('#app');
 
 // PWA: tombol "Pasang aplikasi", status koneksi, dan pemberitahuan versi baru

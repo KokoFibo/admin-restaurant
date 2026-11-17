@@ -10,7 +10,7 @@ const bills = ref<any[]>([]), scope = ref<'open' | 'closed'>('open'), loaded = r
 const pay = reactive<Record<string, { rows: Row[]; touched: boolean }>>({}), disc = reactive<Record<string, number | ''>>({}), discTouched = reactive<Record<string, boolean>>({});
 const sel = reactive<Record<string, boolean>>({}), busyBill = ref('');
 const METHODS = () => ({ cash: t('Tunai'), card: t('Kartu'), qris: 'QRIS', other: t('Lainnya') } as Record<string, string>);
-const STATUS = () => ({ new: t('Baru'), preparing: t('Diproses'), ready: t('Siap'), done: t('Selesai'), cancelled: t('Batal') } as Record<string, string>);
+const STATUS = () => ({ pending: t('Menunggu konfirmasi'), new: t('Baru'), preparing: t('Diproses'), ready: t('Siap'), done: t('Selesai'), cancelled: t('Batal'), rejected: t('Ditolak'), expired: t('Kedaluwarsa') } as Record<string, string>);
 const total = (b: any) => Number(b.figures?.total || 0);
 const title = (b: any) => '#' + String(b.bill_no).padStart(4, '0');
 const where = (b: any) => (b.tables?.length ? b.tables.map((x: any) => x.label).join(' + ') : b.label || '—');
@@ -129,7 +129,7 @@ async function doMerge() {
           <div class="bg-h"><b>{{ g.label }}</b><span>{{ rp(g.sum) }}</span></div>
           <div v-for="o in g.orders" :key="o.id" class="bord" :class="{ off: o.status === 'cancelled' }">
             <label v-if="b.status === 'open' && o.status !== 'cancelled' && liveOrders(b).length > 1" class="chk"><input v-model="sel[o.id]" type="checkbox" /></label>
-            <div><span class="muted">#{{ o.order_no }} · {{ o.table_label }} · {{ hm(o.created_at) }} · {{ STATUS()[o.status] }}</span>
+            <div><span class="muted">#{{ o.order_no }} · {{ o.table_label }}<template v-if="o.source === 'online'"> ({{ o.pickup_by === 'courier' ? t('diambil kurir') : t('diambil pelanggan') }})</template> · {{ hm(o.created_at) }} · {{ STATUS()[o.status] }}</span>
               <ul><li v-for="(i, k) in o.items" :key="k">{{ i.qty }} × {{ i.name }}</li></ul><span v-if="o.note" class="hint">📝 {{ o.note }}</span></div>
             <span class="muted">{{ rp(o.total_idr) }}</span>
           </div>

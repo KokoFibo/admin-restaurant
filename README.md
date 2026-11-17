@@ -98,6 +98,20 @@ Pasang: jalankan `supabase/11-tampilan-menu.sql` (aman diulang). **Owner** memil
 
 Template `aisin` kini bernama tampilan **Arunika**. Jalankan `supabase/12-nama-template.sql` (aman diulang). Id teknis `aisin` tidak berubah, jadi restoran, tautan pendaftaran, dan frontend lama tetap bekerja.
 
+## Pesanan online (takeaway)
+
+Pasang: jalankan `supabase/13-pesanan-online.sql` (setelah 01…12; aman diulang). **Owner** mengaktifkan di tab Pengaturan → *Pesanan online* (bawaan **mati**): menyalin tautan `/pesan`, petunjuk pengambilan, dan (opsional) gambar QRIS untuk **bayar di muka**. Pelanggan memesan tanpa QR meja; pesanan masuk tab Pesanan sebagai **Menunggu konfirmasi** (hanya Owner/Manager/Cashier yang melihatnya; dapur dan Service tidak).
+
+- **Bayar di tempat:** staf menekan *Terima* → tagihan "Online #nomor · Nama" dibuat (tanpa meja) dan pesanan masuk dapur; pelanggan membayar di tab Tagihan saat mengambil. **Bayar di muka (QRIS statis):** pelanggan menekan "Saya sudah bayar"; staf memeriksa di aplikasi merchant sendiri lalu *Pembayaran diterima* (tagihan lunas + masuk dapur). Nominal tidak sesuai → *Tolak* dan kembalikan dana di luar sistem. Tanpa payment gateway.
+- *Tolak* memberi alasan ke pelanggan. Tidak dikonfirmasi dalam **15 menit** = kedaluwarsa otomatis. Membatalkan pesanan online yang sudah diterima otomatis menutup (void) tagihannya.
+- **Kabari via WhatsApp** (saat Siap): membuka `wa.me` dengan pesan terisi; staf menekan Kirim sendiri. Nomor pelanggan disimpan terpisah (hanya Owner/Manager/Cashier) dan **dihapus otomatis setelah 30 hari**.
+- Notifikasi staf: lencana di tab Pesanan dan bunyi berulang selama ada yang menunggu, **hanya saat halaman admin terbuka** (ada pengaturan di *Perangkat ini*). Layar terkunci/aplikasi ditutup tidak berbunyi; Web Push belum dibuat.
+- Total untuk pelanggan sudah termasuk pajak dan biaya layanan (pengaturan Owner yang sama dengan dine-in). Bila pajak/layanan diubah setelah pelanggan memesan lewat QRIS, *Pembayaran diterima* ditolak sistem agar nominal tidak selisih; tolak pesanan itu.
+- Anti-spam di database: 1 pesanan/60 dtk per perangkat dan per nomor, maks 3 menunggu per perangkat/nomor, maks 30 menunggu per restoran.
+- Gambar QRIS diunggah Owner (`x-kind: qris` di `/api/upload`, WebP ≤ 150 KB, jalur `restaurant/tenants/<slug>/qris/…`). **Selalu uji pindai** dari ponsel lain setelah mengunggah.
+- API publik baru: `POST/GET /v1/online-orders`, `POST /v1/online-claim` (lihat kontrak v1.4 di repo frontend).
+- Tes database: `supabase/tests/` (lihat README di dalamnya).
+
 ## Tampilan, profil, dan aplikasi (PWA)
 
 - **Tab Pengaturan** (dulu "Restoran"): terlihat oleh semua peran. Panel restoran (profil, tampilan menu, pembayaran, dll.) hanya untuk Owner; peran lain hanya melihat panel **Perangkat ini**.
