@@ -22,6 +22,22 @@ export async function loadBillReqs() {
   if (billReqInit && fresh.length) toast(t('Minta bill: {0}', fresh.map((x: any) => x.label).join(', ')));
   billReqInit = true;
 }
+/** Nama istilah/tombol yang diubah Owner. Teks staf (lang '*') dan teks pelanggan per bahasa. Kosong = teks bawaan. */
+export const LABEL_STAFF = ['new_order', 'accept', 'reject', 'payment_received', 'notify_customer', 'add_counter_qr'] as const;
+export const LABEL_PUBLIC = ['takeaway', 'online_link', 'send_order', 'i_paid'] as const;
+export const labels = ref<Record<string, Record<string, string>>>({});
+export async function loadLabels() {
+  const tid = S.tid; if (!tid) { labels.value = {}; return; }
+  const { data } = await sb.from('tenant_labels').select('key,lang,text').eq('tenant_id', tid);
+  if (tid !== S.tid) return; const m: Record<string, Record<string, string>> = {};
+  for (const r of data || []) (m[r.key] ??= {})[r.lang] = r.text;
+  labels.value = m;
+}
+/** Teks staf (satu untuk semua bahasa): istilah Owner, atau bawaan. */
+export const lbl = (key: string, def: string) => labels.value[key]?.['*'] || def;
+/** Istilah "take away" untuk tampilan staf (bahasa utama restoran). */
+export const takeawayName = () => labels.value.takeaway?.[S.TL[0]] || 'Take away';
+
 /** Pesanan online yang menunggu konfirmasi (hanya Owner/Manager/Cashier yang bisa melihatnya). Dipakai lencana tab, bunyi, dan daftar di tab Pesanan. */
 export const onlinePending = ref<any[]>([]); let onlineInit = false;
 export async function loadOnlinePending() {
@@ -62,6 +78,7 @@ export const can = {
   banner: () => ['super_admin', 'owner', 'manager'].includes(role()),
   pay: () => ['super_admin', 'owner', 'manager', 'cashier'].includes(role()),
   void: () => ['super_admin', 'owner', 'manager'].includes(role()),   // tutup paksa tagihan / batalkan pembayaran
+  staffOrder: () => ['super_admin', 'owner', 'manager', 'cashier', 'service'].includes(role()),   // "Pesanan baru" oleh staf
   price: () => role() !== 'kitchen',                                  // dapur tidak perlu melihat harga
 };
 export const lim = (c: string) => S.langsAll.find((l: any) => l.code === c) || { code: c, name_native: c, max_name: 60, max_short: 160, max_detail: 700 };
