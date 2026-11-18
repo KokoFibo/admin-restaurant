@@ -95,8 +95,8 @@ async function saveMaster() {
       <div v-if="S.TL.length > 1" class="row"><button type="button" class="btn ghost" @click="trTagline">{{ t('Terjemahkan slogan') }}</button></div>
       <p class="err">{{ pMsg }}</p><div class="row"><button class="btn vm" type="submit">{{ t('Simpan profil') }}</button></div></form>
     <form class="panel" @submit.prevent="saveDisplay"><h3>{{ t('Tampilan menu') }}</h3>
-      <label class="chk"><input v-model="mode" type="radio" value="photo" /> {{ t('Dengan foto (kartu)') }}</label>
-      <label class="chk"><input v-model="mode" type="radio" value="text" /> {{ t('Teks saja (daftar ringkas: nama, deskripsi, harga)') }}</label>
+      <label class="opt"><input v-model="mode" type="radio" value="photo" /><span>{{ t('Dengan foto (kartu)') }}</span></label>
+      <label class="opt"><input v-model="mode" type="radio" value="text" /><span>{{ t('Teks saja (daftar ringkas: nama, deskripsi, harga)') }}</span></label>
       <p class="hint">{{ t('Foto yang sudah diunggah tidak dihapus saat Anda berpindah mode, dan bisa dipakai lagi kapan saja. Foto hero dan banner tidak terpengaruh.') }}</p>
       <p class="err">{{ dMsg }}</p><div class="row"><button class="btn vm" type="submit">{{ t('Simpan tampilan menu') }}</button></div></form>
     <form class="panel" @submit.prevent="saveBilling"><h3>{{ t('Pembayaran: pajak & biaya layanan') }}</h3>
@@ -104,7 +104,7 @@ async function saveMaster() {
       <p class="hint">{{ t('Dihitung di tagihan: (subtotal − diskon) + biaya layanan, lalu pajak atas jumlah itu. Isi 0 bila tidak dipakai. Harga menu dianggap belum termasuk keduanya. Tagihan yang sudah lunas tidak berubah.') }}</p>
       <p class="err">{{ bMsg }}</p><div class="row"><button class="btn vm" type="submit">{{ t('Simpan pembayaran') }}</button></div></form>
     <form class="panel" @submit.prevent="saveOnline"><h3>{{ t('Pesanan online (bungkus / ambil sendiri)') }}</h3>
-      <label class="chk"><input v-model="onl.on" type="checkbox" /> {{ t('Aktifkan pesanan online') }}</label>
+      <label class="swrow"><span>{{ t('Aktifkan pesanan online') }}</span><span class="switch"><input v-model="onl.on" type="checkbox" role="switch" /><i aria-hidden="true"></i></span></label>
       <p class="hint">{{ t('Pelanggan memesan lewat tautan di bawah (tanpa memindai QR meja). Pesanan masuk ke tab Pesanan sebagai "Menunggu konfirmasi" dan baru masuk dapur setelah Anda menerimanya. Tombol "Tutup sementara" juga menutup pesanan online.') }}</p>
       <div v-if="orderLink()" class="copyrow"><input :value="orderLink()" readonly @focus="($event.target as HTMLInputElement).select()" /><button type="button" class="btn ghost" @click="copyLink">{{ t('Salin tautan') }}</button></div>
       <p v-if="orderLink() && !onl.on" class="hint">{{ t('Tautan ini baru berfungsi setelah pesanan online diaktifkan dan disimpan.') }}</p>
@@ -114,7 +114,7 @@ async function saveMaster() {
         <img v-if="qrisUrl()" class="qrisprev" :src="qrisUrl()!" :alt="t('Gambar QRIS')" />
         <div class="row" style="gap:.5rem;flex-wrap:wrap"><label class="btn ghost" style="cursor:pointer">{{ onl.key ? t('Ganti gambar QRIS') : t('Unggah gambar QRIS') }}<input type="file" accept="image/*" hidden :disabled="qBusy" @change="pickQris" /></label>
           <button v-if="onl.key" type="button" class="btn ghost danger" @click="dropQris">{{ t('Hapus gambar QRIS') }}</button></div>
-        <label class="chk"><input v-model="onl.prepay" type="checkbox" :disabled="!onl.key" /> {{ t('Izinkan pelanggan memilih bayar di muka (QRIS)') }}</label>
+        <label class="swrow" :class="{ dis: !onl.key }"><span>{{ t('Izinkan pelanggan memilih bayar di muka (QRIS)') }}</span><span class="switch"><input v-model="onl.prepay" type="checkbox" role="switch" :disabled="!onl.key" /><i aria-hidden="true"></i></span></label>
         <p class="hint">{{ t('Gunakan tangkapan layar atau berkas QRIS yang jelas dan tidak buram. Setelah menyimpan, coba pindai dari halaman pesan dengan ponsel lain sebelum dipakai pelanggan.') }}</p></fieldset>
       <p class="err">{{ oMsg }}</p><div class="row"><button class="btn vm" type="submit" :disabled="qBusy">{{ t('Simpan pesanan online') }}</button></div></form>
     <form v-if="S.isMaster" class="panel" @submit.prevent="saveMaster"><h3>{{ t('Pengaturan master') }} <small class="muted">{{ t('(hanya Super Admin)') }}</small></h3>
