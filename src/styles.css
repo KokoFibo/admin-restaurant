@@ -134,3 +134,21 @@ input[type=range],input[type=checkbox],input[type=radio]{accent-color:var(--jade
 .adm .panel .switch input:checked+i::after{transform:translateX(1.2rem)}
 .adm .panel .switch input:focus-visible+i{outline:2px solid var(--vm);outline-offset:2px}
 @media (prefers-reduced-motion:reduce){.adm .panel .switch i,.adm .panel .switch i::after{transition:none}}
+
+/* ---- pesanan baru oleh staf ---- */
+.sod{min-width:min(34rem,92vw)}
+.sod .sodq{width:100%;margin:.4rem 0}
+.sod .sodmenu{max-height:min(42vh,22rem);overflow:auto;border:1px solid var(--line);border-radius:8px;padding:.3rem .7rem;margin:.4rem 0}
+.sod .sodmenu h4{margin:.7rem 0 .2rem;font-size:.85rem;color:var(--ink2)}
+.sod .sodrow{display:flex;justify-content:space-between;align-items:center;gap:.8rem;padding:.3rem 0;border-bottom:1px solid var(--line)}
+.sod .sodrow.off{opacity:.5}.sod .sodrow small{color:var(--ink2)}
+.sod .qtyc{display:inline-flex;align-items:center;gap:.4rem;flex:none}.sod .qtyc button{width:2rem;height:2rem;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);cursor:pointer}
+.sod .qtyc output{min-width:1.6rem;text-align:center;font-weight:600}
+.sod .sodsum{margin:.4rem 0}
+.tag-kasir{display:inline-block;margin-left:.4rem;padding:.1rem .5rem;border-radius:999px;background:var(--gold-soft);border:1px solid var(--gold);font-size:.72rem}
+
+/* ---- panel nama istilah ---- */
+.labgrp{margin:.6rem 0}.labgrp>b{display:block;margin-bottom:.2rem}
+.adm .panel label.labrow{display:grid;grid-template-columns:minmax(7rem,12rem) 1fr;gap:.6rem;align-items:center;margin:.25rem 0}
+.adm .panel label.labrow input{min-width:0}
+@media (max-width:560px){.adm .panel label.labrow{grid-template-columns:1fr}}

@@ -3,7 +3,7 @@ import { reactive, ref, watch } from 'vue';
 import { t } from '../lib/i18n';
 import { sb, media } from '../lib/supabase';
 import { translate, trErr, uploadImage, deleteImage } from '../lib/api';
-import { S, TYPES, TYPE_DEFAULTS, optionMeta, enabled, lim, load, toast, can, siteBase } from '../store';
+import { S, TYPES, TYPE_DEFAULTS, optionMeta, enabled, lim, load, toast, can, siteBase, labels, loadLabels, loadTables } from '../store';
 import Field from './Field.vue';
 import PurgePanel from './PurgePanel.vue';
 import DevicePanel from './DevicePanel.vue';
@@ -58,6 +58,32 @@ async function saveOnline() {
   const prev = S.T?.qris_image_key; if (prev && prev !== onl.key) deleteImage(prev);
   oMsg.value = ''; qNew.value = ''; toast(t('Tersimpan')); load();
 }
+
+/* ---------- nama istilah & tombol (Owner) ---------- */
+// Teks bawaan (placeholder) harus sama dengan bawaan di situs pelanggan dan di tampilan staf.
+const PUB_DEF: Record<string, Record<string, string>> = {
+  takeaway: { id: 'Take away', en: 'Take away', zh: '外带' },
+  online_link: { id: 'Atau pesan online untuk dibawa pulang', en: 'Or order online for takeaway', zh: '或在线订餐外带' },
+  send_order: { id: 'Kirim pesanan', en: 'Send order', zh: '提交订单' },
+  i_paid: { id: 'Saya sudah bayar', en: 'I have paid', zh: '我已付款' },
+};
+const pubKeys = () => [['takeaway', t('Nama "take away" (QR kasir, tagihan, kartu pesanan)')], ['online_link', t('Tautan pesan online di halaman Order')], ['send_order', t('Tombol kirim di halaman pesan online')], ['i_paid', t('Tombol "Saya sudah bayar"')]];
+const staffKeys = () => [['new_order', t('Tombol pesanan baru oleh staf'), t('+ Pesanan baru')], ['accept', t('Tombol terima pesanan online'), t('Terima')], ['reject', t('Tombol tolak pesanan online'), t('Tolak')], ['payment_received', t('Tombol pembayaran QRIS diterima'), t('Pembayaran diterima')], ['notify_customer', t('Tombol kabari pelanggan'), t('Kabari via WhatsApp')], ['add_counter_qr', t('Tombol tambah QR kasir'), t('+ Tambah QR {0}', labels.value.takeaway?.[S.TL[0]] || 'Take away')]];
+const lab = reactive<Record<string, string>>({}), lMsg = ref('');
+const pubPh = (k: string, l: string) => PUB_DEF[k]?.[l] || PUB_DEF[k]?.en || '';
+function fillLabels() { for (const x of Object.keys(lab)) delete lab[x]; for (const [k, m] of Object.entries(labels.value)) for (const [l, v] of Object.entries(m as any)) lab[`${k}|${l}`] = v as string; }
+watch(labels, fillLabels, { immediate: true, deep: true });
+async function saveLabels(clear = false) {
+  const items: any[] = [];
+  if (!clear) {
+    for (const [k] of pubKeys()) for (const l of S.TL) { const v = (lab[`${k}|${l}`] || '').trim(); if (v) items.push({ key: k, lang: l, text: v }); }
+    for (const [k] of staffKeys()) { const v = (lab[`${k}|*`] || '').trim(); if (v) items.push({ key: k, lang: '*', text: v }); }
+  }
+  lMsg.value = t('Menyimpan…'); const { error } = await sb.rpc('set_labels', { p_tenant: S.tid, p_items: items });
+  if (error) return (lMsg.value = error.message);
+  lMsg.value = ''; toast(t('Tersimpan')); await loadLabels(); loadTables();
+}
+const resetLabels = () => confirm(t('Kembalikan semua nama istilah dan tombol ke teks bawaan?')) && saveLabels(true);
 const langs = () => S.langsAll.filter((l: any) => l.is_available);
 async function saveProfile() {
   pMsg.value = t('Menyimpan…'); const hours: any = {}; (['lunch', 'tea', 'dinner'] as const).forEach(k => { const v = p[k].trim(); if (v) hours[k] = v; });
@@ -117,6 +143,14 @@ async function saveMaster() {
         <label class="swrow" :class="{ dis: !onl.key }"><span>{{ t('Izinkan pelanggan memilih bayar di muka (QRIS)') }}</span><span class="switch"><input v-model="onl.prepay" type="checkbox" role="switch" :disabled="!onl.key" /><i aria-hidden="true"></i></span></label>
         <p class="hint">{{ t('Gunakan tangkapan layar atau berkas QRIS yang jelas dan tidak buram. Setelah menyimpan, coba pindai dari halaman pesan dengan ponsel lain sebelum dipakai pelanggan.') }}</p></fieldset>
       <p class="err">{{ oMsg }}</p><div class="row"><button class="btn vm" type="submit" :disabled="qBusy">{{ t('Simpan pesanan online') }}</button></div></form>
+    <form class="panel" @submit.prevent="saveLabels(false)"><h3>{{ t('Nama istilah & tombol') }}</h3>
+      <p class="hint">{{ t('Ganti kata atau nama tombol sesuai gaya restoran Anda, misalnya "Take away" menjadi "Bungkus". Kolom kosong memakai teks bawaan (ditampilkan samar). Maksimal 40 karakter. Tagihan dan pesanan yang sudah tersimpan tidak berubah; nama baru dipakai untuk yang berikutnya.') }}</p>
+      <fieldset><legend>{{ t('Tampil ke pelanggan (per bahasa)') }}</legend>
+        <div v-for="[k, title] in pubKeys()" :key="k" class="labgrp"><b>{{ title }}</b>
+          <label v-for="l in S.TL" :key="l" class="labrow"><span>{{ lim(l).name_native }}</span><input v-model="lab[`${k}|${l}`]" maxlength="40" :placeholder="pubPh(k, l)" /></label></div></fieldset>
+      <fieldset><legend>{{ t('Tampil ke staf (admin)') }}</legend>
+        <label v-for="[k, title, def] in staffKeys()" :key="k" class="labrow"><span>{{ title }}</span><input v-model="lab[`${k}|*`]" maxlength="40" :placeholder="def" /></label></fieldset>
+      <p class="err">{{ lMsg }}</p><div class="row"><button class="btn vm" type="submit">{{ t('Simpan nama istilah') }}</button><button class="btn ghost" type="button" @click="resetLabels">{{ t('Kembalikan ke bawaan') }}</button></div></form>
     <form v-if="S.isMaster" class="panel" @submit.prevent="saveMaster"><h3>{{ t('Pengaturan master') }} <small class="muted">{{ t('(hanya Super Admin)') }}</small></h3>
       <div class="grid2">
         <label>{{ t('Tipe restoran') }}<select v-model="mst.type" @change="onType"><option v-for="(v, k) in TYPES" :key="k" :value="k">{{ v }}</option></select></label>

@@ -112,6 +112,15 @@ Pasang: jalankan `supabase/13-pesanan-online.sql` (setelah 01…12; aman diulang
 - API publik baru: `POST/GET /v1/online-orders`, `POST /v1/online-claim` (lihat kontrak v1.4 di repo frontend).
 - Tes database: `supabase/tests/` (lihat README di dalamnya).
 
+## QR Kasir, pesanan oleh staf, dan nama istilah
+
+Pasang: jalankan `supabase/14-pesanan-staf-kasir.sql` (setelah 13; aman diulang, hanya menambah).
+
+- **QR Kasir (take away):** tab **Meja** → tombol **+ Tambah QR (take away)** (satu per restoran). Pelanggan yang datang langsung memindai QR di kasir; nama wajib, tiap pesanan menjadi **tagihan sendiri** ("Take away #nomor · Nama") dan langsung masuk dapur. Tidak ada "Minta bill" dan tidak ada batas 15 pelanggan. Nama QR ini mengikuti istilah "take away" di Pengaturan.
+- **Pesanan oleh staf:** tombol **+ Pesanan baru** di tab Pesanan untuk Service, Cashier, Manager, Owner (dapur tidak). Pilih meja (yang punya tagihan terbuka ditandai: pesanan masuk ke tagihan itu) atau Kasir (tagihan baru, nama wajib), pilih menu, **Kirim ke dapur**. Langsung masuk dapur tanpa konfirmasi, tanpa batas 10 dtk/15 pelanggan, dan tetap bisa saat "Tutup sementara". Kartu pesanan bertanda "diinput staf".
+- **Nama istilah & tombol (Owner):** tab Pengaturan → panel **Nama istilah & tombol**. Contoh: "Take away" menjadi "Bungkus". Istilah untuk pelanggan diisi per bahasa; istilah staf satu saja. Kosong = teks bawaan. Maks 40 karakter. Label tagihan/pesanan yang sudah tersimpan tidak berubah. Mengganti istilah "take away" otomatis mengganti nama QR Kasir (ditolak bila bentrok dengan nama meja lain).
+- Tes database: `supabase/tests/14-pesanan-staf-kasir.test.sql`.
+
 ## Tampilan, profil, dan aplikasi (PWA)
 
 - **Tab Pengaturan** (dulu "Restoran"): terlihat oleh semua peran. Panel restoran (profil, tampilan menu, pembayaran, dll.) hanya untuk Owner; peran lain hanya melihat panel **Perangkat ini**.

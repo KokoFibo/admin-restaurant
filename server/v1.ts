@@ -83,6 +83,7 @@ export function buildSite(e: any, raw: any, content: any) {
     id: raw.id, slug: raw.slug, status: raw.status, restaurant_type: raw.restaurant_type, template_id: raw.template_id ?? 'aisin', menu_display: raw.menu_display === 'text' ? 'text' : 'photo', languages: raw.languages ?? ['id'], translations: raw.translations ?? {},
     phone: raw.phone ?? null, whatsapp: raw.whatsapp ?? null, email: raw.email ?? null, maps_url: raw.maps_url ?? null, address: raw.address ?? null, opening_hours: raw.opening_hours ?? null,
     primary_color: null, theme: resolveTheme(raw), orders_open: content?.orders_open !== false,
+    labels: cleanLabels(raw.labels),
     online: { enabled: raw.online_enabled === true, prepay: raw.online_prepay === true, qris_url: raw.online_prepay === true ? mediaUrl(e, raw.qris_image_key) : null, pickup_note: raw.pickup_note ?? null },
     hero: { texts, image: mediaUrl(e, content?.images?.hero) }, banners,
   };
@@ -129,6 +130,14 @@ export async function loadMenu(e: any, sb: ReturnType<typeof db>, site: string) 
 }
 
 /* ---------------- Pesanan ---------------- */
+/** Istilah yang diubah Owner (untuk pelanggan): { kunci: { bahasa: teks } }. Hanya kunci yang dikenal; teks dipotong 40. */
+const LABEL_KEYS = ['takeaway', 'online_link', 'send_order', 'i_paid'];
+function cleanLabels(raw: any) {
+  const out: Record<string, Record<string, string>> = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const k of LABEL_KEYS) { const m = raw[k]; if (!m || typeof m !== 'object') continue; for (const [lang, v] of Object.entries(m)) if (/^[a-z]{2}$/.test(lang) && typeof v === 'string' && v.trim()) (out[k] ??= {})[lang] = v.trim().slice(0, 40); }
+  return out;
+}
 const ORDER_STATUS: Record<string, number> = { 'E:invalid_table': 403, 'E:online_off': 409, 'E:name_required': 400, 'E:phone_invalid': 400, 'E:prepay_off': 409, 'E:pending_full': 429, 'E:invalid_order': 404, 'E:empty': 400, 'E:rate_limited': 429, 'E:too_many_active': 429, 'E:table_full': 409, 'E:no_bill': 409, 'E:item_unavailable': 409, 'E:closed': 409 };
 export function orderError(message: unknown): [string, number] {
   const code = /E:[a-z_]+/.exec(String(message ?? ''))?.[0];

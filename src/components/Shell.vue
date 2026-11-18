@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { t, applyLang, lang } from '../lib/i18n';
-import { S, can, selectTenant, setTab, siteBase, toast, load, billReqs, loadBillReqs, onlinePending, loadOnlinePending, online, updateReady, checkVersion } from '../store';
+import { S, can, selectTenant, setTab, siteBase, toast, load, billReqs, loadBillReqs, onlinePending, loadOnlinePending, loadLabels, online, updateReady, checkVersion } from '../store';
 import { soundOn, beep, audioReady } from '../lib/alert';
 import { sb } from '../lib/supabase';
 import OrdersTab from './OrdersTab.vue'; import BillsTab from './BillsTab.vue'; import MenuTab from './MenuTab.vue'; import CategoriesTab from './CategoriesTab.vue';
 import SiteTab from './SiteTab.vue'; import BannersTab from './BannersTab.vue'; import TablesTab from './TablesTab.vue'; import RestaurantTab from './RestaurantTab.vue'; import AccountsTab from './AccountsTab.vue'; import PasswordDialog from './PasswordDialog.vue'; import ProfileMenu from './ProfileMenu.vue'; import AvatarDialog from './AvatarDialog.vue';
 const pw = ref<any>(), av = ref<any>();
 let reqTimer: any, pendTimer: any;
-watch(() => S.tid, () => { billReqs.value = []; onlinePending.value = []; loadBillReqs(); loadOnlinePending(); }, { immediate: true });
+watch(() => S.tid, () => { billReqs.value = []; onlinePending.value = []; loadBillReqs(); loadOnlinePending(); loadLabels(); }, { immediate: true });
 let alertTimer: any;
 function ring() { if (onlinePending.value.length && soundOn.value && document.visibilityState === 'visible') beep(); }
 /** Di HP tab bisa digeser: pastikan tab aktif terlihat di tengah. */

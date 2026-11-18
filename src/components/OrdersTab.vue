@@ -2,8 +2,9 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { t, rp } from '../lib/i18n';
 import { sb } from '../lib/supabase';
-import { S, can, role, toast, billReqs, loadOnlinePending } from '../store';
-const orders = ref<any[]>([]), items = ref<any[]>([]), phones = ref<Record<string, string>>({}), filter = ref<'active' | 'all'>('active');
+import { S, can, role, toast, billReqs, loadOnlinePending, lbl } from '../store';
+import StaffOrderDialog from './StaffOrderDialog.vue';
+const staffDlg = ref<any>(), orders = ref<any[]>([]), items = ref<any[]>([]), phones = ref<Record<string, string>>({}), filter = ref<'active' | 'all'>('active');
 const LIVE = ['new', 'preparing', 'ready'], NEXT: Record<string, string> = { new: 'preparing', preparing: 'ready', ready: 'done' };
 const STATUS = () => ({ pending: t('Menunggu konfirmasi'), new: t('Baru'), preparing: t('Diproses'), ready: t('Siap'), done: t('Selesai'), cancelled: t('Batal'), rejected: t('Ditolak'), expired: t('Kedaluwarsa') } as Record<string, string>);
 const PAY = () => ({ cash: t('Tunai'), card: t('Kartu'), qris: 'QRIS', other: t('Lainnya') } as Record<string, string>);
@@ -51,9 +52,11 @@ onMounted(() => { loadOrders(); timer = setInterval(poll, 5000); }); onUnmounted
 </script>
 <template>
   <div>
-    <div class="bar row" style="justify-content:space-between">
+    <div class="bar row" style="justify-content:space-between;flex-wrap:wrap;gap:.5rem">
       <span class="langsw"><button :class="{ on: filter === 'active' }" @click="filter = 'active'">{{ t('Aktif') }} ({{ nActive }})</button><button :class="{ on: filter === 'all' }" @click="filter = 'all'">{{ t('Semua (24 jam)') }}</button></span>
-      <span class="hint">{{ t('Diperbarui otomatis tiap 5 detik') }}</span></div>
+      <span class="hint">{{ t('Diperbarui otomatis tiap 5 detik') }}</span>
+      <button v-if="can.staffOrder()" class="btn vm" type="button" @click="staffDlg.open()">{{ lbl('new_order', t('+ Pesanan baru')) }}</button></div>
+    <StaffOrderDialog ref="staffDlg" @done="refresh" />
     <p v-if="role() === 'service' && billReqs.length" class="billbell">🔔 {{ t('Minta bill') }}: <b>{{ billReqs.map((x: any) => x.label).join(', ') }}</b></p>
     <p v-if="can.pay()" class="hint">{{ t('Pembayaran dicatat di tab Tagihan.') }}</p>
 
@@ -71,9 +74,9 @@ onMounted(() => { loadOrders(); timer = setInterval(poll, 5000); }); onUnmounted
           <p v-if="o.note" class="hint">📝 {{ o.note }}</p>
           <div class="oft"><b>{{ rp(totalOf(o)) }}</b>
             <span class="row" style="gap:.35rem">
-              <button v-if="o.pay_plan === 'prepay_qris'" @click="acceptPaid(o)">{{ t('Pembayaran diterima') }}</button>
-              <button v-else @click="accept(o)">{{ t('Terima') }}</button>
-              <button class="danger" @click="reject(o)">{{ t('Tolak') }}</button></span></div>
+              <button v-if="o.pay_plan === 'prepay_qris'" @click="acceptPaid(o)">{{ lbl('payment_received', t('Pembayaran diterima')) }}</button>
+              <button v-else @click="accept(o)">{{ lbl('accept', t('Terima')) }}</button>
+              <button class="danger" @click="reject(o)">{{ lbl('reject', t('Tolak')) }}</button></span></div>
         </div>
       </div>
     </section>
@@ -83,13 +86,13 @@ onMounted(() => { loadOrders(); timer = setInterval(poll, 5000); }); onUnmounted
         <div class="ohead"><b>#{{ o.order_no }}</b><span class="rolebadge">{{ STATUS()[o.status] }}</span><b>{{ isOnline(o) ? t('Online') : o.table_label }}</b>
           <span class="muted">{{ new Date(o.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }}</span>
           <span v-if="can.pay() && o.status !== 'rejected' && o.status !== 'expired'" class="paytag" :class="{ ok: o.payment_status === 'paid' }">{{ o.payment_status === 'paid' ? `${t('Dibayar')} · ${PAY()[o.payment_method] || ''}` : t('Belum dibayar') }}</span></div>
-        <span v-if="o.customer_name" class="muted">{{ o.customer_name }}<template v-if="isOnline(o)"> · {{ o.pickup_by === 'courier' ? t('Diambil kurir') : t('Diambil pelanggan') }}</template></span>
+        <span v-if="o.customer_name || o.source === 'staff'" class="muted">{{ o.customer_name }}<template v-if="o.source === 'staff'"> · {{ t('diinput staf') }}</template><template v-if="isOnline(o)"> · {{ o.pickup_by === 'courier' ? t('Diambil kurir') : t('Diambil pelanggan') }}</template></span>
         <ul><li v-for="i in itemsOf(o.id)" :key="i.id">{{ i.qty }} × {{ i.name_snapshot }}</li></ul>
         <p v-if="o.note" class="hint">📝 {{ o.note }}</p>
         <p v-if="o.status === 'rejected' && o.reject_reason" class="hint">{{ o.reject_reason }}</p>
         <div class="oft"><b v-if="can.pay()">{{ rp(o.total_idr) }}</b><span v-else />
           <span class="row" style="gap:.35rem;flex-wrap:wrap">
-            <button v-if="o.status === 'ready' && waAvailable(o)" @click="wa(o)">💬 {{ t('Kabari via WhatsApp') }}</button>
+            <button v-if="o.status === 'ready' && waAvailable(o)" @click="wa(o)">💬 {{ lbl('notify_customer', t('Kabari via WhatsApp')) }}</button>
             <button v-if="canNext(o)" @click="status(o, NEXT[o.status])">{{ nextLabel(o.status) }}</button>
             <button v-if="can.pay() && LIVE.includes(o.status)" class="danger" @click="cancel(o)">{{ t('Batal') }}</button>
             <button v-if="can.pay() && (o.status === 'done' || (o.status === 'cancelled' && !isOnline(o)))" @click="status(o, 'new')">{{ t('Buka lagi') }}</button>
