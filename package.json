@@ -6,7 +6,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "pages:dev": "vite build && wrangler pages dev dist"
+    "pages:dev": "vite build && wrangler pages dev dist",
+    "test:translate": "node scripts/test-translate.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",

@@ -4,7 +4,7 @@ Aplikasi admin (Vue 3 + Vite) terpisah dari website. **Satu alamat untuk semua r
 
 - **Database & login**: Supabase (`supabase/*.sql`, urutan 00 → 01 → 02 → 03 → 04 → **05**).
 - **Foto**: Cloudflare R2 lewat `/api/upload` (menu 4:3 ≤60 KB; hero 4:5 ≤140 KB).
-- **Terjemahan AI**: `/api/translate` (Gemini). **Akun**: `/api/users`. **Lupa kata sandi**: `/api/forgot`. **API publik website**: `/v1/*` (lihat bawah). Semua = Cloudflare Pages Functions (`functions/`), satu domain dengan admin, tanpa CORS.
+- **Terjemahan AI**: `/api/translate` (Gemini, **satu model tetap: `gemini-3.1-flash-lite`**, tanpa pemilihan otomatis dan tanpa model cadangan). **Akun**: `/api/users`. **Lupa kata sandi**: `/api/forgot`. **API publik website**: `/v1/*` (lihat bawah). Semua = Cloudflare Pages Functions (`functions/`), satu domain dengan admin, tanpa CORS.
 
 ## Role
 
@@ -133,3 +133,11 @@ Pasang: jalankan `supabase/14-pesanan-staf-kasir.sql` (setelah 13; aman diulang,
 - **Tampilan HP (≤ 640 px):** bilah atas satu baris (nama toko maks. 2 baris berelipsis + lingkaran Profil; "Tutup sementara" tampil kecil di bawahnya bagi Owner/Manager); pilihan bahasa dan "Lihat website" pindah ke menu Profil; tab satu baris yang bisa digeser dan tab aktif otomatis terpusat; email panjang di menu Profil satu baris berelipsis (ketuk untuk melihat lengkap); kolom isian satu kolom dan kartu tagihan mengikuti lebar layar (tanpa scroll horizontal di 360 px). Di layar lebar tampilan lama tetap dipakai.
 - **Ikon berlencana logo browser (Android):** itu tanda situs terpasang sebagai *pintasan*, bukan aplikasi. Pasang lewat menu Chrome ⋮ → **Pasang aplikasi** (bukan "Tambahkan ke layar utama"), dengan Chrome dan Play Store terbaru, sudah login di Play Store, dan tanpa VPN/DNS filter yang menghalangi pembuatan WebAPK. Manifest proyek ini sudah memenuhi syarat pasang (diperiksa lewat Chrome DevTools Protocol: tanpa galat installability).
 
+
+
+## Terjemahan AI (Gemini)
+
+- Model: **`gemini-3.1-flash-lite`** saja. Kode tidak membaca daftar model dan tidak berpindah ke model lain bila gagal.
+- Variabel: `GEMINI_API_KEY` (wajib, dari Google AI Studio). `AI_MODEL` **opsional**: bila diisi (tidak kosong), nilai itu menggantikan model di atas, jadi **kosongkan/hapus** variabel itu di Cloudflare bila ingin tetap memakai `gemini-3.1-flash-lite`. `AI_BASE_URL` opsional (bawaan Google).
+- Galat: batas pemakaian Google penuh → 503 "Batas pemakaian AI penuh…"; model tidak tersedia untuk kunci Anda atau galat Google lain → 502 dengan nama model di rincian.
+- Tes: `npm run test:translate` (Supabase dan Google palsu; memastikan hanya satu panggilan ke model itu).

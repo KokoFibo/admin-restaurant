@@ -1,22 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 import { env } from '../../server/env';
 
-// Daftar model Flash yang tersedia untuk kunci ini, diurutkan dari yang terbaru. Disimpan sebentar di memori.
-let modelCache: { at: number; models: string[] } | null = null;
-async function candidateModels(base: string, key: string, forced?: string): Promise<string[]> {
-  if (forced) return [forced];
-  if (modelCache && Date.now() - modelCache.at < 10 * 60e3) return modelCache.models;
-  let names: string[] = [];
-  try {
-    const r = await fetch(`${base}/models?pageSize=200`, { headers: { 'x-goog-api-key': key } });
-    if (r.ok) names = ((await r.json()).models ?? []).filter((m: any) => (m.supportedGenerationMethods ?? []).includes('generateContent')).map((m: any) => String(m.name).replace(/^models\//, ''));
-  } catch { /* pakai daftar cadangan */ }
-  const score = (n: string) => { const m = n.match(/^gemini-(\d+(?:\.\d+)?)-flash(-lite)?(-[a-z0-9.-]+)?$/); if (!m || /image|tts|audio|live|embed|thinking|robot|computer|native|exp/.test(n)) return -1; return parseFloat(m[1]) * 100 + (m[2] ? 0 : 20) + (/preview/.test(n) ? -10 : 0) - (m[3] && !/preview/.test(m[3]) ? 5 : 0); };
-  const ranked = names.filter(n => score(n) >= 0).sort((a, b) => score(b) - score(a)).slice(0, 4);
-  const models = ranked.length ? ranked : ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-3-flash-preview'];
-  modelCache = { at: Date.now(), models };
-  return models;
-}
+// Terjemahan memakai SATU model saja: gemini-3.1-flash-lite (stabil/GA di Gemini API). Tidak ada pemilihan otomatis dan tidak ada model cadangan.
+// AI_MODEL (opsional, di pengaturan Cloudflare) menggantinya; bila diisi, nilai itulah yang dipakai. Kosongkan/hapus variabel itu agar kembali ke model di bawah.
+const MODEL = 'gemini-3.1-flash-lite';
 
 const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json' } });
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -62,7 +49,7 @@ export const onRequestPost = async ({ request, env: e }: any) => {
   if (ok.error || ok.data !== true) return json({ error: 'Kuota habis atau akses ditolak' }, 429);
 
   // 5) terjemahkan dengan Gemini (kunci dari Google AI Studio; tier gratis punya batas per menit/hari).
-  //    Model dipilih otomatis dari yang tersedia untuk kunci ini; AI_MODEL (opsional) memaksa satu model.
+  //    Satu model tetap (MODEL); kegagalan dilaporkan apa adanya, tanpa mencoba model lain.
   const system = `You translate restaurant menu texts from ${src.name_english} to ${tgt.name_english} for a ${tn.data.restaurant_type} restaurant website. ` +
     `Write natural, appetising, concise menu language. Keep ingredient and cooking-technique names accurate; do not add claims that are not in the source. ` +
     `Each key has a maximum length in characters (see "limits"); never exceed it. ${target === 'zh' ? GLOSSARY_ZH : ''} ` +
@@ -73,19 +60,15 @@ export const onRequestPost = async ({ request, env: e }: any) => {
     contents: [{ role: 'user', parts: [{ text: JSON.stringify({ limits: Object.fromEntries(keys.map(k => [k, limits[k] ?? 300])), texts }) }] }],
     generationConfig: { responseMimeType: 'application/json', temperature: 0.2, maxOutputTokens: 4096 },
   });
-  let res: Response | null = null, detail = '';
-  const list = await candidateModels(base, apiKey, env(e, 'AI_MODEL'));
-  for (const model of list) {
-    try { res = await fetch(`${base}/models/${encodeURIComponent(model)}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey }, body }); }
-    catch { detail = 'Layanan Google tidak terjangkau'; res = null; continue; }
-    if (res.ok) { modelCache = { at: Date.now(), models: [model, ...list.filter(m => m !== model)] }; break; }   // ingat model yang berhasil
-    if (res.status === 429) return json({ error: 'Batas pemakaian AI penuh, coba lagi sebentar lagi' }, 503);
-    detail = `${model}: ${((await res.json().catch(() => ({})))?.error?.message || res.status)}`.slice(0, 300);
-    if (![400, 403, 404].includes(res.status)) break;   // galat selain "model tidak tersedia": jangan coba model lain
-    res = null;
+  const model = (env(e, 'AI_MODEL') || '').trim() || MODEL;   // variabel kosong/hanya spasi dianggap tidak diisi
+  let res: Response;
+  try { res = await fetch(`${base}/models/${encodeURIComponent(model)}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey }, body }); }
+  catch { return json({ error: 'Layanan terjemahan gagal', detail: 'Layanan Google tidak terjangkau' }, 502); }
+  if (res.status === 429) return json({ error: 'Batas pemakaian AI penuh, coba lagi sebentar lagi' }, 503);
+  if (!res.ok) {
+    const msg = (await res.json().catch(() => ({})))?.error?.message || res.status;
+    return json({ error: 'Layanan terjemahan gagal', detail: `${model}: ${msg}`.slice(0, 300) }, 502);   // mis. model tidak tersedia untuk kunci ini
   }
-  if (!res) modelCache = null;   // semua gagal: daftar model dibaca ulang pada permintaan berikutnya
-  if (!res) return json({ error: 'Layanan terjemahan gagal', detail }, 502);
   try {
     const parts = (await res.json()).candidates?.[0]?.content?.parts ?? [];
     const text = parts.filter((p: any) => !p.thought).map((p: any) => p.text || '').join('').replace(/^```(?:json)?|```$/gm, '').trim();
