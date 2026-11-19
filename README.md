@@ -140,4 +140,5 @@ Pasang: jalankan `supabase/14-pesanan-staf-kasir.sql` (setelah 13; aman diulang,
 - Model: **`gemini-3.1-flash-lite`** saja. Kode tidak membaca daftar model dan tidak berpindah ke model lain bila gagal.
 - Variabel: `GEMINI_API_KEY` (wajib, dari Google AI Studio). `AI_MODEL` **opsional**: bila diisi (tidak kosong), nilai itu menggantikan model di atas, jadi **kosongkan/hapus** variabel itu di Cloudflare bila ingin tetap memakai `gemini-3.1-flash-lite`. `AI_BASE_URL` opsional (bawaan Google).
 - Galat: batas pemakaian Google penuh → 503 "Batas pemakaian AI penuh…"; model tidak tersedia untuk kunci Anda atau galat Google lain → 502 dengan nama model di rincian.
+- Batas: maks 12 kolom per permintaan (menu 4, banner 2, hero website 9) dan 8192 token keluaran; hasil yang terpotong dilaporkan dengan pesan jelas.
 - Tes: `npm run test:translate` (Supabase dan Google palsu; memastikan hanya satu panggilan ke model itu).

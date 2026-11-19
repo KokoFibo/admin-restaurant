@@ -28,6 +28,8 @@ globalThis.fetch = async (input, init = {}) => {
     if (mode === '404') return j({ error: { message: 'models/xyz is not found for API version v1beta' } }, 404);
     if (mode === '429') return j({ error: { message: 'quota' } }, 429);
     if (mode === '500') return j({ error: { message: 'Internal error' } }, 500);
+    if (mode === 'trunc') return j({ candidates: [{ finishReason: 'MAX_TOKENS', content: { parts: [{ text: '{"eyebrow":"Ab' }] } }] });
+    if (mode === 'hero') { const src = JSON.parse(geminiBody.contents[0].parts[0].text).texts; return j({ candidates: [{ content: { parts: [{ text: JSON.stringify(Object.fromEntries(Object.keys(src).map(k => [k, 'EN ' + src[k]]))) }] } }] }); }
     if (mode === 'junk') return j({ candidates: [{ content: { parts: [{ text: 'bukan json' }] } }] });
     if (mode === 'long') return j({ candidates: [{ content: { parts: [{ text: JSON.stringify({ name: 'A very long dish name that is too long' }) }] } }] });
     return j({ candidates: [{ content: { parts: [{ thought: true, text: 'berpikir' }, { text: '```json\n{"name":"Tofu"}\n```' }] } }] });
@@ -55,5 +57,18 @@ mode = '429'; const r6 = await call(); ok('batas pemakaian (429): 503 pesan "Bat
 mode = '500'; const r7 = await call(); ok('galat server Google (500): 502 dengan rincian (bukan "Format tidak valid")', r7.status === 502 && r7.body.error === 'Layanan terjemahan gagal' && r7.body.detail.includes('Internal error'), JSON.stringify(r7.body));
 mode = 'net'; const r8 = await call(); ok('Google tidak terjangkau: 502 + rincian', r8.status === 502 && r8.body.detail === 'Layanan Google tidak terjangkau', JSON.stringify(r8.body));
 mode = 'junk'; const r9 = await call(); ok('keluaran bukan JSON: 502 "Format terjemahan tidak valid"', r9.status === 502 && r9.body.error === 'Format terjemahan tidak valid', JSON.stringify(r9.body));
+
+console.log('\nHero website (9 kolom) dan batas kolom');
+const HERO = { eyebrow: 'Vegetarian', title: 'Rasa', title_em: 'tenang', lead: 'Deskripsi hero', chip1: 'Halal', chip2: 'Segar', chip3: 'Sehat', cta_order: 'Pesan', cta_menu: 'Menu' };
+mode = 'hero'; const h1 = await call(env(), HERO);
+ok('hero 9 kolom: berhasil, semua kolom diterjemahkan', h1.status === 200 && Object.keys(h1.body.fields).length === 9 && h1.body.fields.cta_menu === 'EN Menu', JSON.stringify(h1));
+ok('hero: tetap satu panggilan ke gemini-3.1-flash-lite', gemini.length === 1 && gemini[0].endsWith('/models/gemini-3.1-flash-lite:generateContent'));
+ok('hero: batas keluaran 8192 token', geminiBody.generationConfig.maxOutputTokens === 8192);
+const THIRTEEN = Object.fromEntries(Array.from({ length: 13 }, (_, i) => ['k' + i, 'x']));
+const h2 = await call(env(), THIRTEEN); ok('13 kolom ditolak 400 dengan rincian, tanpa memanggil Gemini', h2.status === 400 && h2.body.detail.includes('maks 12') && gemini.length === 0, JSON.stringify(h2.body));
+const h3 = await call(env(), { a: '   ', b: '' }); ok('semua kolom kosong: 400 dengan rincian', h3.status === 400 && h3.body.detail.includes('Tidak ada teks') && gemini.length === 0, JSON.stringify(h3.body));
+const TWELVE = Object.fromEntries(Array.from({ length: 12 }, (_, i) => ['k' + i, 'x']));
+const h4 = await call(env(), TWELVE); ok('12 kolom (batas) masih diterima', h4.status === 200, JSON.stringify(h4.body));
+mode = 'trunc'; const h5 = await call(env(), HERO); ok('hasil terpotong (MAX_TOKENS): 502 dengan pesan yang jelas', h5.status === 502 && h5.body.detail.includes('terpotong'), JSON.stringify(h5.body));
 globalThis.fetch = real;
 console.log(`\nHasil: ${pass} lulus, ${fail} gagal`); process.exit(fail ? 1 : 0);
