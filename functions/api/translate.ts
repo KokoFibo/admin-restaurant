@@ -4,6 +4,7 @@ import { env } from '../../server/env';
 // Terjemahan memakai SATU model saja: gemini-3.1-flash-lite (stabil/GA di Gemini API). Tidak ada pemilihan otomatis dan tidak ada model cadangan.
 // AI_MODEL (opsional, di pengaturan Cloudflare) menggantinya; bila diisi, nilai itulah yang dipakai. Kosongkan/hapus variabel itu agar kembali ke model di bawah.
 const MODEL = 'gemini-3.1-flash-lite';
+const MAX_KEYS = 12;   // kolom per permintaan: menu 4, banner 2, hero website 9
 
 const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json' } });
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -27,7 +28,8 @@ export const onRequestPost = async ({ request, env: e }: any) => {
   catch { return json({ error: 'Bad request' }, 400); }
   if (!UUID.test(tenantId) || !LANG.test(source) || !LANG.test(target) || source === target) return json({ error: 'Bad request' }, 400);
   const keys = Object.keys(fields).filter(k => typeof fields[k] === 'string' && fields[k].trim());
-  if (!keys.length || keys.length > 8) return json({ error: 'Bad request' }, 400);
+  if (!keys.length) return json({ error: 'Bad request', detail: 'Tidak ada teks untuk diterjemahkan' }, 400);
+  if (keys.length > MAX_KEYS) return json({ error: 'Bad request', detail: `Terlalu banyak kolom (maks ${MAX_KEYS})` }, 400);   // hero website memakai 9 kolom
   const texts: Record<string, string> = {};
   for (const k of keys) texts[k] = fields[k].trim().slice(0, 1000);
 
@@ -58,7 +60,7 @@ export const onRequestPost = async ({ request, env: e }: any) => {
   const body = JSON.stringify({
     systemInstruction: { parts: [{ text: system }] },
     contents: [{ role: 'user', parts: [{ text: JSON.stringify({ limits: Object.fromEntries(keys.map(k => [k, limits[k] ?? 300])), texts }) }] }],
-    generationConfig: { responseMimeType: 'application/json', temperature: 0.2, maxOutputTokens: 4096 },
+    generationConfig: { responseMimeType: 'application/json', temperature: 0.2, maxOutputTokens: 8192 },
   });
   const model = (env(e, 'AI_MODEL') || '').trim() || MODEL;   // variabel kosong/hanya spasi dianggap tidak diisi
   let res: Response;
@@ -70,7 +72,10 @@ export const onRequestPost = async ({ request, env: e }: any) => {
     return json({ error: 'Layanan terjemahan gagal', detail: `${model}: ${msg}`.slice(0, 300) }, 502);   // mis. model tidak tersedia untuk kunci ini
   }
   try {
-    const parts = (await res.json()).candidates?.[0]?.content?.parts ?? [];
+    const data = await res.json(), cand = data.candidates?.[0];
+    // Token "berpikir" Gemini ikut dihitung di batas keluaran: hasil bisa terpotong sebelum JSON selesai.
+    if (cand?.finishReason === 'MAX_TOKENS') return json({ error: 'Layanan terjemahan gagal', detail: 'Hasil terjemahan terpotong, coba lagi atau terjemahkan lebih sedikit kolom' }, 502);
+    const parts = cand?.content?.parts ?? [];
     const text = parts.filter((p: any) => !p.thought).map((p: any) => p.text || '').join('').replace(/^```(?:json)?|```$/gm, '').trim();
     const out = JSON.parse(text);
     const clean: Record<string, string> = {}, over: string[] = [];
