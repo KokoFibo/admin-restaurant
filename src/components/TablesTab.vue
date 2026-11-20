@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { t } from '../lib/i18n';
+import { askConfirm, askPrompt } from '../lib/dialog';
 import { sb } from '../lib/supabase';
 import { S, siteBase, loadTables, qrList, toast, run, lbl, takeawayName } from '../store';
 import Modal from './Modal.vue';
@@ -15,11 +16,11 @@ async function submit() {
 }
 const toggle = async (tb: any) => { await run(sb.from('restaurant_tables').update({ is_active: !tb.is_active }).eq('id', tb.id)); loadTables(); };
 async function rotate(tb: any) {
-  if (!confirm(t('Ganti QR meja "{0}"? QR yang sudah dicetak tidak akan berlaku lagi.', tb.label))) return;
+  if (!(await askConfirm(t('Ganti QR meja "{0}"? QR yang sudah dicetak tidak akan berlaku lagi.', tb.label), { danger: true }))) return;
   const { error } = await sb.rpc('rotate_table_token', { p_table: tb.id }); if (error) return toast(error.message); toast(t('QR diganti. Cetak ulang QR meja ini.')); loadTables();
 }
 async function del(tb: any) {
-  if (!confirm(t('Hapus meja "{0}"? Riwayat pesanan tetap ada.', tb.label))) return;
+  if (!(await askConfirm(t('Hapus meja "{0}"? Riwayat pesanan tetap ada.', tb.label), { danger: true }))) return;
   const { error } = await sb.from('restaurant_tables').delete().eq('id', tb.id); if (error) return toast(error.message); toast(t('Dihapus')); loadTables();
 }
 const hasCounter = () => S.tables.some((x: any) => x.kind === 'counter');

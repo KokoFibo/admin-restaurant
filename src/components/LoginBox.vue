@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { t, applyLang, lang } from '../lib/i18n';
+import ThemeToggle from './ThemeToggle.vue';
 import { forgotApi } from '../lib/api';
 import { login } from '../store';
 import { configured } from '../lib/supabase';
@@ -27,7 +28,7 @@ async function sendReset() { busy.value = true; msg.value = ''; await forgotApi(
 <template>
   <section class="panel box">
     <div class="row" style="justify-content:space-between"><h2>{{ t('Admin Menu') }}</h2>
-      <span class="langsw"><button type="button" :class="{ on: lang === 'id' }" @click="applyLang('id')">ID</button><button type="button" :class="{ on: lang === 'en' }" @click="applyLang('en')">EN</button></span></div>
+      <span class="langsw"><button type="button" :class="{ on: lang === 'id' }" @click="applyLang('id')">ID</button><button type="button" :class="{ on: lang === 'en' }" @click="applyLang('en')">EN</button></span> <ThemeToggle /></div>
     <template v-if="!forgot">
       <p class="muted">{{ t('Masuk untuk mengelola menu restoran.') }}</p>
       <p v-if="!configured" class="err">{{ t('Konfigurasi belum lengkap: PUBLIC_SUPABASE_URL / PUBLIC_SUPABASE_ANON_KEY tidak terbaca saat build. Isi di Cloudflare Pages lalu deploy ulang.') }}</p>

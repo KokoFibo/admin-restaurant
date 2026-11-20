@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { t, applyLang, lang } from '../lib/i18n';
+import ThemeToggle from './ThemeToggle.vue';
 import { slug as slugify } from '../lib/image';
 import { sb, media, configured } from '../lib/supabase';
 import { TYPES } from '../store';
@@ -53,7 +54,7 @@ async function submit() {
 <template>
   <section class="panel box wide">
     <div class="row" style="justify-content:space-between"><h2>{{ t('Daftar restoran') }}</h2>
-      <span class="langsw"><button type="button" :class="{ on: lang === 'id' }" @click="applyLang('id')">ID</button><button type="button" :class="{ on: lang === 'en' }" @click="applyLang('en')">EN</button></span></div>
+      <span class="langsw"><button type="button" :class="{ on: lang === 'id' }" @click="applyLang('id')">ID</button><button type="button" :class="{ on: lang === 'en' }" @click="applyLang('en')">EN</button></span> <ThemeToggle /></div>
 
     <template v-if="done">
       <p class="hint">{{ done.needs_confirmation ? t('Pendaftaran berhasil. Kami mengirim email konfirmasi; buka tautannya lalu masuk ke admin.') : t('Pendaftaran berhasil. Silakan masuk ke admin.') }}</p>

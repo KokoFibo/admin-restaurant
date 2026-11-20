@@ -7,6 +7,7 @@ import SignupBox from './components/SignupBox.vue';
 import RecoverBox from './components/RecoverBox.vue';
 import Shell from './components/Shell.vue';
 import QrDialog from './components/QrDialog.vue';
+import DialogHost from './components/DialogHost.vue';
 // Pendaftaran restoran baru: admin.<domain>/#daftar (bisa ditautkan dari halaman pemasaran).
 const signup = ref(location.hash === '#daftar');
 const onHash = () => (signup.value = location.hash === '#daftar');
@@ -21,5 +22,6 @@ onBeforeUnmount(() => removeEventListener('hashchange', onHash));
   <LoginBox v-else-if="S.view === 'login'" />
   <Shell v-else />
   <QrDialog v-if="qrList" />
+  <DialogHost />
   <div id="toast" :class="{ show: !!toastMsg }">{{ toastMsg }}</div>
 </template>

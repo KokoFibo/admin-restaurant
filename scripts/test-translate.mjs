@@ -18,8 +18,8 @@ globalThis.fetch = async (input, init = {}) => {
   const u = String(input?.url ?? input), method = (init.method || 'GET').toUpperCase();
   const j = (o, status = 200, h = {}) => new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json', ...h } });
   if (u.startsWith('https://supabase.test/auth/v1/user')) return j({ id: 'u1', aud: 'authenticated', email: 'o@x', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' });
-  if (u.includes('/rest/v1/tenant_languages')) return j([{ lang: 'id' }, { lang: 'en' }]);
-  if (u.includes('/rest/v1/languages')) return j([{ code: 'id', name_english: 'Indonesian', max_name: 40, max_short: 120, max_detail: 400 }, { code: 'en', name_english: 'English', max_name: 12, max_short: 120, max_detail: 400 }]);
+  if (u.includes('/rest/v1/tenant_languages')) return j([{ lang: 'id' }, { lang: 'en' }, { lang: 'zh' }, { lang: 'zt' }]);
+  if (u.includes('/rest/v1/languages')) return j([{ code: 'id', name_english: 'Indonesian', max_name: 40, max_short: 120, max_detail: 400 }, { code: 'en', name_english: 'English', max_name: 12, max_short: 120, max_detail: 400 }, { code: 'zh', name_english: 'Chinese (Simplified)', max_name: 30, max_short: 80, max_detail: 350 }, { code: 'zt', name_english: 'Chinese (Traditional)', max_name: 30, max_short: 80, max_detail: 350 }]);
   if (u.includes('/rest/v1/tenants')) return j({ restaurant_type: 'vegan' });
   if (u.includes('/rest/v1/rpc/consume_ai')) return j(true);
   if (u.startsWith('https://gemini.test/')) {
@@ -37,9 +37,9 @@ globalThis.fetch = async (input, init = {}) => {
   other.push(u); return j({ error: 'tak terduga: ' + u }, 500);
 };
 const env = (extra = {}) => ({ PUBLIC_SUPABASE_URL: 'https://supabase.test', PUBLIC_SUPABASE_ANON_KEY: 'anon', GEMINI_API_KEY: 'k', AI_BASE_URL: 'https://gemini.test/v1beta', ...extra });
-const call = async (e = env(), fields = { name: 'Tahu' }) => {
+const call = async (e = env(), fields = { name: 'Tahu' }, target = 'en') => {
   gemini = []; other = []; geminiBody = null;
-  const res = await onRequestPost({ request: new Request('https://admin.test/api/translate', { method: 'POST', headers: { authorization: 'Bearer t', 'content-type': 'application/json' }, body: JSON.stringify({ tenant_id: T, source: 'id', target: 'en', fields }) }), env: e });
+  const res = await onRequestPost({ request: new Request('https://admin.test/api/translate', { method: 'POST', headers: { authorization: 'Bearer t', 'content-type': 'application/json' }, body: JSON.stringify({ tenant_id: T, source: 'id', target, fields }) }), env: e });
   return { status: res.status, body: await res.json() };
 };
 
@@ -70,5 +70,14 @@ const h3 = await call(env(), { a: '   ', b: '' }); ok('semua kolom kosong: 400 d
 const TWELVE = Object.fromEntries(Array.from({ length: 12 }, (_, i) => ['k' + i, 'x']));
 const h4 = await call(env(), TWELVE); ok('12 kolom (batas) masih diterima', h4.status === 200, JSON.stringify(h4.body));
 mode = 'trunc'; const h5 = await call(env(), HERO); ok('hasil terpotong (MAX_TOKENS): 502 dengan pesan yang jelas', h5.status === 502 && h5.body.detail.includes('terpotong'), JSON.stringify(h5.body));
+
+console.log('\nChinese Traditional (zt) dan Simplified (zh)');
+mode = 'ok';
+await call(env(), { name: 'Jamur surai singa' }, 'zt'); const bzt = JSON.stringify(geminiBody);
+ok('target zt: glosarium 繁體 (猴頭菇) dan perintah memakai karakter Traditional', bzt.includes('猴頭菇') && bzt.includes('灌湯包') && bzt.includes('Traditional') && !bzt.includes('猴头菇'), bzt.slice(0, 200));
+ok('target zt: nama bahasa Chinese (Traditional) dikirim ke model', bzt.includes('Chinese (Traditional)'));
+await call(env(), { name: 'Jamur surai singa' }, 'zh'); const bzh = JSON.stringify(geminiBody);
+ok('target zh: glosarium 简体 (猴头菇), tanpa glosarium Traditional', bzh.includes('猴头菇') && !bzh.includes('猴頭菇'));
+const tz = await call(env(), { name: 'Tahu' }, 'zt'); ok('target zt diterima server (kode 2 huruf) dan tetap satu panggilan', tz.status === 200 && gemini.length === 1, JSON.stringify(tz));
 globalThis.fetch = real;
 console.log(`\nHasil: ${pass} lulus, ${fail} gagal`); process.exit(fail ? 1 : 0);

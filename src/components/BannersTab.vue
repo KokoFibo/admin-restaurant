@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
 import { t } from '../lib/i18n';
+import { askConfirm, askPrompt } from '../lib/dialog';
 import { sb } from '../lib/supabase';
 import { translate, trErr } from '../lib/api';
 import { S, lim, toast } from '../store';
@@ -40,7 +41,7 @@ async function submit() {
   if (error) return (msg.value = error.message); m.value.close(); toast(t('Tersimpan')); load();
 }
 async function toggle(r: any) { const { error } = await sb.from('site_banners').update({ is_active: !r.is_active }).eq('id', r.id); if (error) return toast(error.message); load(); }
-async function del(r: any) { if (!confirm(t('Hapus banner ini?'))) return; const { error } = await sb.from('site_banners').delete().eq('id', r.id); if (error) return toast(error.message); toast(t('Dihapus')); load(); }
+async function del(r: any) { if (!(await askConfirm(t('Hapus banner ini?'), { danger: true }))) return; const { error } = await sb.from('site_banners').delete().eq('id', r.id); if (error) return toast(error.message); toast(t('Dihapus')); load(); }
 </script>
 <template>
   <div>
