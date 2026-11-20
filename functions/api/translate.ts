@@ -9,6 +9,7 @@ const MAX_KEYS = 12;   // kolom per permintaan: menu 4, banner 2, hero website 9
 const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json' } });
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const LANG = /^[a-z]{2}$/;
+const GLOSSARY_ZT = 'Glosarium: matsutake=松茸, morel=羊肚菌, jamur surai singa=猴頭菇, jamur kuping hitam=黑木耳, kulit tahu=腐竹, truffle hitam=黑松露, pu-erh=普洱, teh putih=白茶, goji=枸杞, dim sum=點心, pangsit kuah=灌湯包. Use Traditional Chinese characters (繁體中文) with Taiwan usage; never Simplified.';
 const GLOSSARY_ZH = 'Glosarium: matsutake=松茸, morel=羊肚菌, jamur surai singa=猴头菇, jamur kuping hitam=黑木耳, kulit tahu=腐竹, truffle hitam=黑松露, pu-erh=普洱, teh putih=白茶, goji=枸杞, dim sum=点心, pangsit kuah=灌汤包.';
 
 export const onRequestPost = async ({ request, env: e }: any) => {
@@ -54,7 +55,7 @@ export const onRequestPost = async ({ request, env: e }: any) => {
   //    Satu model tetap (MODEL); kegagalan dilaporkan apa adanya, tanpa mencoba model lain.
   const system = `You translate restaurant menu texts from ${src.name_english} to ${tgt.name_english} for a ${tn.data.restaurant_type} restaurant website. ` +
     `Write natural, appetising, concise menu language. Keep ingredient and cooking-technique names accurate; do not add claims that are not in the source. ` +
-    `Each key has a maximum length in characters (see "limits"); never exceed it. ${target === 'zh' ? GLOSSARY_ZH : ''} ` +
+    `Each key has a maximum length in characters (see "limits"); never exceed it. ${target === 'zh' ? GLOSSARY_ZH : target === 'zt' ? GLOSSARY_ZT : ''} ` +
     `Reply ONLY with a JSON object with exactly the same keys as "texts", values being the translations.`;
   const base = env(e, 'AI_BASE_URL') || 'https://generativelanguage.googleapis.com/v1beta';
   const body = JSON.stringify({

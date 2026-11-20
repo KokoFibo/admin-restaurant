@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { t } from '../lib/i18n';
+import { askConfirm, askPrompt } from '../lib/dialog';
 import { sb } from '../lib/supabase';
 import { usersApi } from '../lib/api';
 import { S, ROLE_LABEL, CREATE_ROLES, role, loadMembers, toast } from '../store';
@@ -18,7 +19,7 @@ async function add() {
 }
 async function toggle(m: any) {
   const off = m.is_active;
-  if (off && !confirm(t('Nonaktifkan {0}? Akun tidak bisa masuk lagi sampai diaktifkan kembali.', m.email) + (m.role === 'owner' ? '\n' + t('Berlaku untuk semua restoran milik akun ini.') : ''))) return;
+  if (off && !(await askConfirm(t('Nonaktifkan {0}? Akun tidak bisa masuk lagi sampai diaktifkan kembali.', m.email) + (m.role === 'owner' ? '\n' + t('Berlaku untuk semua restoran milik akun ini.') : ''), { danger: true }))) return;
   try { await call(off ? 'deactivate' : 'activate', m); toast(off ? t('Akun dinonaktifkan') : t('Akun diaktifkan')); loadMembers(); } catch (e: any) { toast(e.message); }
 }
 async function del(m: any) {
@@ -29,12 +30,12 @@ async function del(m: any) {
       if (r.sole?.length) return toast(t('Tidak bisa dihapus: {0} satu-satunya owner aktif di {1}. Tambahkan owner pengganti dulu.', m.email, r.sole.join(', ')));
       if ((r.restaurants || []).length > 1) text += '\n' + t('Akun ini juga owner di: {0}.', r.restaurants.join(', '));
     }
-    if (!confirm(text)) return;
+    if (!(await askConfirm(text, { danger: true }))) return;
     await call('delete', m); toast(t('Akun dihapus')); loadMembers();
   } catch (e: any) { toast(e.message); }
 }
 async function remove(m: any) {
-  if (!confirm(t('Cabut akses {0} dari restoran ini? Akunnya tidak dihapus.', m.email))) return;
+  if (!(await askConfirm(t('Cabut akses {0} dari restoran ini? Akunnya tidak dihapus.', m.email), { danger: true }))) return;
   const { error } = await sb.rpc('master_remove_member', { p_tenant: S.tid, p_user: m.user_id }); if (error) return toast(error.message); toast(t('Akses dicabut')); loadMembers();
 }
 </script>

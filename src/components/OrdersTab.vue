@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { t, rp } from '../lib/i18n';
+import { askConfirm, askPrompt } from '../lib/dialog';
 import { sb } from '../lib/supabase';
 import { S, can, role, toast, billReqs, loadOnlinePending, lbl } from '../store';
 import StaffOrderDialog from './StaffOrderDialog.vue';
@@ -30,10 +31,10 @@ const brand = computed(() => S.tenTr.find((x: any) => x.lang === S.TL[0])?.brand
 async function refresh() { await loadOrders(); loadOnlinePending(); }
 async function act(p: Promise<any>) { const { error } = await p; if (error) { toast(error.message); await refresh(); return; } await refresh(); }
 const status = (o: any, s: string) => act(sb.rpc('set_order_status', { p_order: o.id, p_status: s }));
-const cancel = (o: any) => confirm(t('Batalkan pesanan #{0}?', o.order_no)) && status(o, 'cancelled');
+const cancel = async (o: any) => (await askConfirm(t('Batalkan pesanan #{0}?', o.order_no), { danger: true })) && status(o, 'cancelled');
 const accept = (o: any) => act(sb.rpc('accept_online_order', { p_order: o.id }));
-const acceptPaid = (o: any) => confirm(t('Pembayaran QRIS {0} sudah masuk di aplikasi merchant Anda? Tagihan akan ditandai lunas dan pesanan masuk dapur.', rp(totalOf(o)))) && act(sb.rpc('accept_online_prepaid', { p_order: o.id }));
-function reject(o: any) { const r = prompt(t('Tolak pesanan #{0}? Tulis alasan untuk pelanggan (opsional):', o.order_no)); if (r === null) return; act(sb.rpc('reject_online_order', { p_order: o.id, p_reason: r })); }
+const acceptPaid = async (o: any) => (await askConfirm(t('Pembayaran QRIS {0} sudah masuk di aplikasi merchant Anda? Tagihan akan ditandai lunas dan pesanan masuk dapur.', rp(totalOf(o))))) && act(sb.rpc('accept_online_prepaid', { p_order: o.id }));
+async function reject(o: any) { const r = await askPrompt(t('Tolak pesanan #{0}? Tulis alasan untuk pelanggan (opsional):', o.order_no), { danger: true, placeholder: t('Alasan (opsional)') }); if (r === null) return; act(sb.rpc('reject_online_order', { p_order: o.id, p_reason: r })); }
 /** Buka WhatsApp dengan pesan terisi (nomor dari pesanan; tanpa API, staf menekan Kirim sendiri). */
 function wa(o: any) {
   const ph = phones.value[o.id]; if (!ph) return toast(t('Nomor WhatsApp pelanggan tidak tersedia (dihapus otomatis setelah 30 hari).'));

@@ -156,5 +156,13 @@ export async function loadMembers() {
 export async function loadTables() {
   const { data } = await sb.from('restaurant_tables').select('*').eq('tenant_id', S.tid); S.tables = (data || []).sort(bySort);
 }
-export async function setTab(tab: string) { S.tab = tab; if (tab === 'akun') await loadMembers(); if (tab === 'tables') await loadTables(); }
+/** Sub-tab halaman Pengaturan (diingat per perangkat). */
+export const sub = ref<string>((() => { try { return localStorage.getItem('admin_sub') || 'profil'; } catch { return 'profil'; } })());
+export function openSettings(section: string) { sub.value = section; try { localStorage.setItem('admin_sub', section); } catch { /* abaikan */ } S.tab = 'resto'; }
+/** Tab lama "Tampilan Website" dan "Banner" kini sub-tab Pengaturan (alamat/pintasan lama tetap menuju tempat barunya). */
+const LEGACY_TAB: Record<string, string> = { site: 'situs', banner: 'banner' };
+export async function setTab(tab: string) {
+  if (LEGACY_TAB[tab]) return openSettings(LEGACY_TAB[tab]);
+  S.tab = tab; if (tab === 'akun') await loadMembers(); if (tab === 'tables') await loadTables();
+}
 export const run = async (p: Promise<any>, ok = '') => { const { error } = await p; if (error) return toast(error.message); if (ok) toast(ok); await load(); };

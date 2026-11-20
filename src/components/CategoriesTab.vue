@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue';
 import { t } from '../lib/i18n';
+import { askConfirm, askPrompt } from '../lib/dialog';
 import { sb } from '../lib/supabase';
 import { translate, trErr } from '../lib/api';
 import { vSortable } from '../lib/sortable';
@@ -24,7 +25,7 @@ async function submit() {
   m.value.close(); toast(t('Tersimpan')); load();
 }
 async function del(c: any) {
-  if (!confirm(t('Hapus kategori "{0}"?', catName(c.id)))) return;
+  if (!(await askConfirm(t('Hapus kategori "{0}"?', catName(c.id)), { danger: true }))) return;
   const { error } = await sb.from('categories').delete().eq('id', c.id); if (error) return toast(t('Kategori masih berisi menu (pindahkan atau hapus dulu menunya).')); toast(t('Dihapus')); load();
 }
 </script>

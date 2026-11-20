@@ -121,6 +121,17 @@ Pasang: jalankan `supabase/14-pesanan-staf-kasir.sql` (setelah 13; aman diulang,
 - **Nama istilah & tombol (Owner):** tab Pengaturan → panel **Nama istilah & tombol**. Contoh: "Take away" menjadi "Bungkus". Istilah untuk pelanggan diisi per bahasa; istilah staf satu saja. Kosong = teks bawaan. Maks 40 karakter. Label tagihan/pesanan yang sudah tersimpan tidak berubah. Mengganti istilah "take away" otomatis mengganti nama QR Kasir (ditolak bila bentrok dengan nama meja lain).
 - Tes database: `supabase/tests/14-pesanan-staf-kasir.test.sql`.
 
+## Pengaturan: sub-tab, Konfigurasi Restoran, dialog, mode gelap
+
+Pasang: jalankan `supabase/15-konfigurasi-restoran.sql` (setelah 14; aman diulang, hanya menambah).
+
+- **Tab Pengaturan memakai sub-tab** (urutan tetap): Profil Restoran · Tampilan Website · Tampilan Menu · Kustomisasi Istilah & Tombol · Pajak & Biaya Layanan · Pesanan Online · **Konfigurasi Restoran** · Perangkat Ini · Banner · Hapus Data Tenant (hanya Super Admin). "Tampilan Website" dan "Banner" tidak lagi tab utama (pintasan lama tetap menuju tempat barunya). Manager hanya melihat Banner dan Perangkat Ini; peran lain hanya Perangkat Ini. Sub-tab terakhir diingat per perangkat.
+- **Konfigurasi Restoran** (dulu "Pengaturan master") kini bisa diubah **Owner dan Super Admin**: tipe restoran, zona waktu, bahasa utama, bahasa kedua (opsional), bahasa tampilan awal website (muncul bila ada bahasa kedua), bahasa admin bawaan (tombol pilihan, bukan dropdown), dan pilihan menu yang ditampilkan. Disimpan lewat `set_tenant_config` (satu panggilan).
+- **Bahasa:** semua isi tabel `languages` bisa dipilih: Indonesia, English, 简体中文, **繁體中文 (kode `zt`)**, Français, Español, 한국어, 日本語. **Bahasa utama** = sumber isi, terjemahan, dan nama hidangan di dapur. **Bahasa tampilan awal** = yang dilihat pengunjung di alamat tanpa awalan; bila kosong = bahasa utama.
+- **Dialog kustom:** tidak ada lagi `confirm()`/`prompt()` bawaan browser. Semua konfirmasi dan isian alasan memakai `askConfirm()`/`askPrompt()` (`src/lib/dialog.ts`, dirender `DialogHost.vue`): Esc membatalkan, fokus terkunci, tombol berbahaya merah, panel dari bawah di ponsel. `npm run test:admin` menggagalkan bila ada dialog bawaan yang tersisa.
+- **Mode terang/gelap:** tombol matahari/bulan di header dan layar login. Pilihan "Otomatis (ikuti perangkat)" tetap ada di menu avatar.
+- Tes: `npm run test:admin` (dialog, sub-tab per peran, kelengkapan terjemahan EN), `npm run test:translate`, dan tes database `supabase/tests/15-konfigurasi-restoran.test.sql`.
+
 ## Tampilan, profil, dan aplikasi (PWA)
 
 - **Tab Pengaturan** (dulu "Restoran"): terlihat oleh semua peran. Panel restoran (profil, tampilan menu, pembayaran, dll.) hanya untuk Owner; peran lain hanya melihat panel **Perangkat ini**.

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { t, rp } from '../lib/i18n';
+import { askConfirm, askPrompt } from '../lib/dialog';
 import { sb, media } from '../lib/supabase';
 import { deleteImage } from '../lib/api';
 import { vSortable } from '../lib/sortable';
@@ -13,9 +14,9 @@ const name = (i: any) => itText(i.id, S.TL[0]).name || t('(tanpa nama)');
 const flags = (i: any) => [i.has_egg && t('telur'), i.has_onion && t('bawang'), i.is_non_halal && t('non halal'), i.is_spicy && t('pedas {0}/5', i.spice_level), i.is_sold_out && t('HABIS'), !i.is_visible && t('tersembunyi')].filter(Boolean).join(' · ');
 const sortOpts = (catId: string) => ({ enabled: can.edit(), ids: inCat(catId).map((i: any) => i.id), onSort: (ids: string[]) => run(sb.rpc('reorder_menu_items', { p_tenant: S.tid, p_category: catId, p_ids: ids }), t('Urutan disimpan')) });
 const feature = (i: any) => run(sb.from('menu_items').update({ is_featured: !i.is_featured }).eq('id', i.id));
-const arch = (i: any) => confirm(t('Arsipkan "{0}"? Menu disembunyikan dan bisa dipulihkan dari Arsip.', name(i))) && run(sb.from('menu_items').update({ archived_at: new Date().toISOString() }).eq('id', i.id), t('Diarsipkan'));
+const arch = async (i: any) => (await askConfirm(t('Arsipkan "{0}"? Menu disembunyikan dan bisa dipulihkan dari Arsip.', name(i)))) && run(sb.from('menu_items').update({ archived_at: new Date().toISOString() }).eq('id', i.id), t('Diarsipkan'));
 async function del(i: any) {   // hapus permanen: baris menu dulu, lalu fotonya di R2
-  if (!confirm(t('Hapus menu "{0}" beserta fotonya? Tidak bisa dibatalkan.', name(i)))) return;
+  if (!(await askConfirm(t('Hapus menu "{0}" beserta fotonya? Tidak bisa dibatalkan.', name(i)), { danger: true }))) return;
   const { error } = await sb.from('menu_items').delete().eq('id', i.id); if (error) return toast(error.message);
   await deleteImage(i.image_key); toast(t('Menu dan fotonya dihapus')); load();
 }

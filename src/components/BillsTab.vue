@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
 import { t, rp } from '../lib/i18n';
+import { askConfirm, askPrompt } from '../lib/dialog';
 import { sb } from '../lib/supabase';
 import { S, can, toast, loadBillReqs } from '../store';
 import Modal from './Modal.vue';
@@ -75,12 +76,12 @@ async function doPay(b: any) {
 async function applyDisc(b: any) { const v = num(disc[b.id]); discTouched[b.id] = false; await act(b, sb.rpc('set_bill_discount', { p_bill: b.id, p_amount: v }), t('Diskon disimpan')); }
 async function doSplit(b: any) {
   const ids = selected(b); if (!ids.length) return;
-  if (!confirm(t('Pisahkan {0} pesanan ke tagihan baru? Tagihan baru dibayar sendiri.', ids.length))) return;
+  if (!(await askConfirm(t('Pisahkan {0} pesanan ke tagihan baru? Tagihan baru dibayar sendiri.', ids.length)))) return;
   ids.forEach((id: string) => delete sel[id]); await act(b, sb.rpc('split_orders', { p_orders: ids }), t('Pesanan dipisahkan'), true);
 }
-async function doUndo(b: any) { if (!b.undo || !confirm(t('Urungkan: {0}?', b.undo.summary))) return; await act(b, sb.rpc('undo_last', { p_bill: b.id }), t('Tindakan diurungkan'), true); }
-async function doVoid(b: any) { const r = prompt(t('Tutup paksa tagihan {0} tanpa pembayaran? Tulis alasan (opsional):', title(b))); if (r === null) return; await act(b, sb.rpc('void_bill', { p_bill: b.id, p_reason: r }), t('Tagihan ditutup')); }
-async function doReopen(b: any) { const r = prompt(t('Batalkan pembayaran tagihan {0}? Tulis alasan (opsional):', title(b))); if (r === null) return; await act(b, sb.rpc('reopen_bill', { p_bill: b.id, p_reason: r }), t('Pembayaran dibatalkan, tagihan dibuka lagi')); }
+async function doUndo(b: any) { if (!b.undo || !(await askConfirm(t('Urungkan: {0}?', b.undo.summary)))) return; await act(b, sb.rpc('undo_last', { p_bill: b.id }), t('Tindakan diurungkan'), true); }
+async function doVoid(b: any) { const r = await askPrompt(t('Tutup paksa tagihan {0} tanpa pembayaran? Tulis alasan (opsional):', title(b)), { danger: true, placeholder: t('Alasan (opsional)') }); if (r === null) return; await act(b, sb.rpc('void_bill', { p_bill: b.id, p_reason: r }), t('Tagihan ditutup')); }
+async function doReopen(b: any) { const r = await askPrompt(t('Batalkan pembayaran tagihan {0}? Tulis alasan (opsional):', title(b)), { danger: true, placeholder: t('Alasan (opsional)') }); if (r === null) return; await act(b, sb.rpc('reopen_bill', { p_bill: b.id, p_reason: r }), t('Pembayaran dibatalkan, tagihan dibuka lagi')); }
 
 /* ---- gabung meja ---- */
 const mdlg = ref<any>(), pick = reactive<Record<string, boolean>>({});

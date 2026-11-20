@@ -152,3 +152,29 @@ input[type=range],input[type=checkbox],input[type=radio]{accent-color:var(--jade
 .adm .panel label.labrow{display:grid;grid-template-columns:minmax(7rem,12rem) 1fr;gap:.6rem;align-items:center;margin:.25rem 0}
 .adm .panel label.labrow input{min-width:0}
 @media (max-width:560px){.adm .panel label.labrow{grid-template-columns:1fr}}
+
+/* ---- dialog konfirmasi/isian kustom (menggantikan confirm()/prompt() bawaan browser) ---- */
+dialog.appdlg{width:min(26rem,92vw);padding:1.2rem 1.3rem 1.1rem;border:1px solid var(--line);border-radius:14px;background:var(--bg);color:var(--ink);box-shadow:0 24px 60px -12px rgba(0,0,0,.45)}
+dialog.appdlg::backdrop{background:rgba(10,14,12,.55);backdrop-filter:blur(2px)}
+dialog.appdlg h3{margin:0 0 .5rem;font-size:1.05rem}
+dialog.appdlg.danger h3{color:var(--vm)}
+dialog.appdlg .appdlg-m{margin:0 0 1rem;white-space:pre-line;line-height:1.5;color:var(--ink2)}
+dialog.appdlg .appdlg-in{width:100%;margin:0 0 1rem;padding:.55rem .7rem;border:1px solid var(--line);border-radius:8px;background:var(--bg2);color:var(--ink);font:inherit}
+dialog.appdlg .appdlg-act{display:flex;gap:.6rem;justify-content:flex-end;flex-wrap:wrap}
+dialog.appdlg .appdlg-act .btn.danger{background:var(--vm);border-color:var(--vm);color:#fff}
+@media (max-width:560px){dialog.appdlg{width:100%;max-width:100%;margin:auto 0 0;border-radius:16px 16px 0 0;padding-bottom:calc(1.1rem + env(safe-area-inset-bottom,0px))}dialog.appdlg .appdlg-act .btn{flex:1}}
+
+/* ---- tombol mode terang/gelap & sub-tab Pengaturan & pilihan segmen ---- */
+.themebtn{display:inline-flex;align-items:center;justify-content:center;width:2.1rem;height:2.1rem;padding:0;border:1px solid var(--line);border-radius:50%;background:transparent;color:var(--ink);cursor:pointer;flex:none}
+.themebtn:hover{border-color:var(--jade);color:var(--jade)}.themebtn:focus-visible{outline:2px solid var(--vm);outline-offset:2px}
+.subtabs{display:flex;gap:.35rem;overflow-x:auto;padding:.2rem 0 .7rem;margin:0 0 1rem;border-bottom:1px solid var(--line);scrollbar-width:thin;-webkit-overflow-scrolling:touch}
+.subtabs button{flex:none;padding:.45rem .9rem;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--ink);font:inherit;font-size:.88rem;cursor:pointer;white-space:nowrap}
+.subtabs button:hover{border-color:var(--jade)}.subtabs button.on{background:var(--jade);border-color:var(--jade);color:var(--bg);font-weight:600}
+.subtabs button:focus-visible{outline:2px solid var(--vm);outline-offset:2px}
+.adm .panel fieldset.segfs{margin:.8rem 0}
+.adm .panel .seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:999px;overflow:hidden}
+.adm .panel label.segopt{position:relative;display:block;margin:0;cursor:pointer}
+.adm .panel .segopt input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer}
+.adm .panel .segopt span{display:block;padding:.5rem 1.1rem;font-size:.92rem}
+.adm .panel .segopt input:checked+span{background:var(--jade);color:var(--bg);font-weight:600}
+.adm .panel .segopt input:focus-visible+span{outline:2px solid var(--vm);outline-offset:-3px}

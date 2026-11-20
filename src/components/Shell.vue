@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { t, applyLang, lang } from '../lib/i18n';
+import ThemeToggle from './ThemeToggle.vue';
+import { askConfirm, askPrompt } from '../lib/dialog';
 import { S, can, selectTenant, setTab, siteBase, toast, load, billReqs, loadBillReqs, onlinePending, loadOnlinePending, loadLabels, online, updateReady, checkVersion } from '../store';
 import { soundOn, beep, audioReady } from '../lib/alert';
 import { sb } from '../lib/supabase';
 import OrdersTab from './OrdersTab.vue'; import BillsTab from './BillsTab.vue'; import MenuTab from './MenuTab.vue'; import CategoriesTab from './CategoriesTab.vue';
-import SiteTab from './SiteTab.vue'; import BannersTab from './BannersTab.vue'; import TablesTab from './TablesTab.vue'; import RestaurantTab from './RestaurantTab.vue'; import AccountsTab from './AccountsTab.vue'; import PasswordDialog from './PasswordDialog.vue'; import ProfileMenu from './ProfileMenu.vue'; import AvatarDialog from './AvatarDialog.vue';
+import TablesTab from './TablesTab.vue'; import SettingsTab from './SettingsTab.vue'; import AccountsTab from './AccountsTab.vue'; import PasswordDialog from './PasswordDialog.vue'; import ProfileMenu from './ProfileMenu.vue'; import AvatarDialog from './AvatarDialog.vue';
 const pw = ref<any>(), av = ref<any>();
 let reqTimer: any, pendTimer: any;
 watch(() => S.tid, () => { billReqs.value = []; onlinePending.value = []; loadBillReqs(); loadOnlinePending(); loadLabels(); }, { immediate: true });
@@ -16,14 +18,14 @@ function centerTab() { nextTick(() => { const el = document.querySelector('.tabs
 watch(() => S.tab, centerTab);
 onMounted(() => { centerTab(); checkVersion(); reqTimer = setInterval(() => document.visibilityState === 'visible' && loadBillReqs(), 6000); pendTimer = setInterval(() => document.visibilityState === 'visible' && loadOnlinePending(), 5000); alertTimer = setInterval(ring, 7000); });
 onUnmounted(() => { clearInterval(reqTimer); clearInterval(pendTimer); clearInterval(alertTimer); });
-const tabs = computed<[string, string][]>(() => ([['orders', t('Pesanan') + (onlinePending.value.length ? ` 🔴${onlinePending.value.length}` : ''), true], ['bills', t('Tagihan') + (billReqs.value.length ? ` 🔔${billReqs.value.length}` : ''), can.pay()], ['menu', t('Menu'), true], ['cats', t('Kategori'), can.edit()], ['tables', t('Meja'), can.edit()], ['resto', t('Pengaturan'), true], ['site', t('Tampilan Website'), can.site()], ['banner', t('Banner'), can.banner()], ['akun', t('Akun'), can.accounts()]] as [string, string, boolean][]).filter(x => x[2]).map(x => [x[0], x[1]]));
-const view = { orders: OrdersTab, bills: BillsTab, menu: MenuTab, cats: CategoriesTab, tables: TablesTab, resto: RestaurantTab, site: SiteTab, banner: BannersTab, akun: AccountsTab } as any;
+const tabs = computed<[string, string][]>(() => ([['orders', t('Pesanan') + (onlinePending.value.length ? ` 🔴${onlinePending.value.length}` : ''), true], ['bills', t('Tagihan') + (billReqs.value.length ? ` 🔔${billReqs.value.length}` : ''), can.pay()], ['menu', t('Menu'), true], ['cats', t('Kategori'), can.edit()], ['tables', t('Meja'), can.edit()], ['resto', t('Pengaturan'), true], ['akun', t('Akun'), can.accounts()]] as [string, string, boolean][]).filter(x => x[2]).map(x => [x[0], x[1]]));
+const view = { orders: OrdersTab, bills: BillsTab, menu: MenuTab, cats: CategoriesTab, tables: TablesTab, resto: SettingsTab, akun: AccountsTab } as any;
 const name = computed(() => (S.tenTr.find((x: any) => x.lang === S.TL[0])?.brand_name || S.T?.slug || ''));
 const site = computed(siteBase);
 const location = window.location;
 const paused = computed(() => !!S.T?.orders_paused);
 async function togglePause() {
-  const next = !paused.value; if (next && !confirm(t('Tutup pemesanan QR sementara? Pelanggan tidak bisa memesan sampai dibuka lagi.'))) return;
+  const next = !paused.value; if (next && !(await askConfirm(t('Tutup pemesanan QR sementara? Pelanggan tidak bisa memesan sampai dibuka lagi.'), { danger: true }))) return;
   const { error } = await sb.rpc('set_orders_paused', { p_tenant: S.tid, p_paused: next }); if (error) return toast(error.message);
   toast(next ? t('Pemesanan ditutup sementara') : t('Pemesanan dibuka kembali')); load();
 }
@@ -35,6 +37,7 @@ function pick(l: 'id' | 'en') { applyLang(l); if (S.uid) sb.auth.updateUser({ da
       <span class="ah-r">
         <select v-if="S.isMaster || S.tenants.length > 1" :aria-label="t('Restoran')" :value="S.tid" @change="selectTenant(($event.target as any).value)"><option v-for="x in S.tenants" :key="x.id" :value="x.id">{{ x.slug }}</option></select>
         <span class="langsw hd-lang"><button type="button" :class="{ on: lang === 'id' }" @click="pick('id')">ID</button><button type="button" :class="{ on: lang === 'en' }" @click="pick('en')">EN</button></span>
+        <ThemeToggle />
         <button v-if="S.T && can.banner()" class="btn ghost pausebtn" :class="{ on: paused }" @click="togglePause">{{ paused ? t('Pemesanan: DITUTUP — buka lagi') : t('Tutup sementara') }}</button>
         <a v-if="site" class="hd-site" :href="site" target="_blank" rel="noopener">{{ t('Lihat website ↗') }}</a>
         <ProfileMenu :site="site" @lang="pick" @password="pw.open()" @avatar="av.open()" /></span></header>
